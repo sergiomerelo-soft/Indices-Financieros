@@ -17,9 +17,9 @@
           "simbolo": "BTC-USD",
           "nombre": "Bitcoin",
           "fecha": "2026-11-22",
-          "valor": 60685.4688,
+          "valor": 60726.1289,
           "tasa": false,
-          "variacion": 0.98,
+          "variacion": 1.05,
           "unidad": "%"
         }
       ]
@@ -77,6 +77,24 @@
           "valor": 4.912,
           "tasa": true,
           "variacion": -14.0,
+          "unidad": "pb"
+        },
+        {
+          "simbolo": "ES10Y",
+          "nombre": "Bono España 10 años",
+          "fecha": "2026-11-17",
+          "valor": 3.95,
+          "tasa": true,
+          "variacion": 4.0,
+          "unidad": "pb"
+        },
+        {
+          "simbolo": "DE10Y",
+          "nombre": "Bono Alemania 10 años",
+          "fecha": "2026-11-19",
+          "valor": 3.4,
+          "tasa": true,
+          "variacion": 0.0,
           "unidad": "pb"
         },
         {
