@@ -1,0 +1,51 @@
+[
+  {
+    "simbolo": "^GSPC",
+    "nombre": "S&P 500",
+    "fecha": "2026-11-20",
+    "valor": 6910.3901,
+    "variacion_pct": -3.7
+  },
+  {
+    "simbolo": "^IXIC",
+    "nombre": "Nasdaq",
+    "fecha": "2026-11-20",
+    "valor": 22617.7305,
+    "variacion_pct": -5.28
+  },
+  {
+    "simbolo": "^DJI",
+    "nombre": "Dow Jones",
+    "fecha": "2026-11-20",
+    "valor": 48147.3281,
+    "variacion_pct": -1.93
+  },
+  {
+    "simbolo": "^IBEX",
+    "nombre": "IBEX 35",
+    "fecha": "2026-11-20",
+    "valor": 18873.0996,
+    "variacion_pct": -1.63
+  },
+  {
+    "simbolo": "GC=F",
+    "nombre": "Oro",
+    "fecha": "2026-11-20",
+    "valor": 3515.3999,
+    "variacion_pct": -4.62
+  },
+  {
+    "simbolo": "BTC-USD",
+    "nombre": "Bitcoin",
+    "fecha": "2026-11-22",
+    "valor": 60566.9688,
+    "variacion_pct": 0.79
+  },
+  {
+    "simbolo": "^TNX",
+    "nombre": "Bono EE.UU. 10 años (%)",
+    "fecha": "2026-11-20",
+    "valor": 4.912,
+    "variacion_pct": -2.77
+  }
+]
