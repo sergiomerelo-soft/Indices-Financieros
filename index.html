@@ -15,13 +15,17 @@
 html,body{margin:0}
 body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));max-width:720px;margin:0 auto}
 h1{font-size:20px;margin:6px 0 2px}
-.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
+.tabs button{flex:1 0 auto;padding:9px 12px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:999px;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .card{background:var(--card);border:2px solid transparent;border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:inherit;font:inherit}
 .card.sel{border-color:var(--accent)}
 .card .n{font-size:12px;color:var(--muted)}
 .card .v{font-size:18px;font-weight:600;margin-top:2px}
 .card .c{font-size:13px;font-weight:600;margin-top:2px}
+.card .d{font-size:11px;color:var(--muted);margin-top:2px}
 .up{color:var(--up)}.down{color:var(--down)}
 .bar{display:flex;gap:6px;margin:16px 0 8px;flex-wrap:wrap}
 .bar button{flex:1;min-width:48px;padding:8px 6px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
@@ -29,24 +33,30 @@ h1{font-size:20px;margin:6px 0 2px}
 .chart{background:var(--card);border-radius:12px;padding:10px;height:340px;position:relative}
 .all{width:100%;margin-top:10px;padding:10px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;font:inherit;font-size:14px;cursor:pointer}
 .all.on{background:var(--accent);border-color:var(--accent);color:#fff}
-.msg{padding:20px;color:var(--muted);text-align:center}
+.msg{padding:20px;color:var(--muted);text-align:center;grid-column:1/-1}
+.hide{display:none}
 </style>
 </head>
 <body>
 <h1>Índices financieros</h1>
 <div class="sub" id="sub">Cargando…</div>
+<div class="tabs" id="tabs"></div>
 <div class="grid" id="cards"></div>
-<div class="bar" id="rangos"></div>
-<div class="chart"><canvas id="grafico"></canvas></div>
-<button class="all" id="todos">Comparar todos (base 100)</button>
+<div id="detalle">
+  <div class="bar" id="rangos"></div>
+  <div class="chart"><canvas id="grafico"></canvas></div>
+  <button class="all" id="todos">Comparar todos los de esta sección</button>
+</div>
 
 <script>
-const COLORES = ["#2563eb","#16a34a","#dc2626","#f59e0b","#9333ea","#0891b2","#db2777"];
+const COLORES = ["#2563eb","#16a34a","#dc2626","#f59e0b","#9333ea","#0891b2","#db2777","#65a30d"];
 const RANGOS = {"1M":30,"6M":182,"1A":365,"5A":1825,"Máx":99999};
-let simbolos = [], nombres = {}, filas = [], ultimo = [];
-let seleccion = null, rango = "1A", modoTodos = false, grafico = null;
+let secciones = [], simbolos = [], filas = [];
+let iSec = 0, seleccion = null, rango = "1A", comparar = false, grafico = null;
 
 const fmt = (n, d = 2) => n.toLocaleString("es-ES", {maximumFractionDigits: d});
+const fechaCorta = f => f.slice(8, 10) + "/" + f.slice(5, 7);
+const seccion = () => secciones[iSec] || {items: []};
 
 async function cargar() {
   try {
@@ -56,40 +66,63 @@ async function cargar() {
       fetch("data/historico.csv?" + t)
     ]);
     if (!r1.ok || !r2.ok) throw new Error("No se encuentran los datos");
-    ultimo = await r1.json();
+    secciones = (await r1.json()).secciones;
     const lineas = (await r2.text()).trim().split("\n");
     simbolos = lineas[0].split(",").slice(1);
     filas = lineas.slice(1).map(l => {
       const p = l.split(",");
       return {f: p[0], v: p.slice(1).map(x => x === "" ? null : parseFloat(x))};
     });
-    ultimo.forEach(u => nombres[u.simbolo] = u.nombre);
-    seleccion = seleccion || (ultimo[0] && ultimo[0].simbolo);
-    const fecha = ultimo.map(u => u.fecha).sort().pop();
-    document.getElementById("sub").textContent = "Último cierre: " + fecha;
-    pintarTarjetas();
-    pintarRangos();
-    pintarGrafico();
+    const fechas = secciones.flatMap(s => s.items.map(i => i.fecha)).sort();
+    document.getElementById("sub").textContent =
+      fechas.length ? "Datos hasta el " + fechas[fechas.length - 1] : "";
+    iSec = Math.max(0, secciones.findIndex(s => s.items.length));
+    elegirPorDefecto();
+    refrescar();
   } catch (e) {
     document.getElementById("sub").textContent = "";
     document.getElementById("cards").innerHTML = '<div class="msg">No se han podido cargar los datos.</div>';
   }
 }
 
+function elegirPorDefecto() {
+  const items = seccion().items;
+  if (!items.find(i => i.simbolo === seleccion)) seleccion = items.length ? items[0].simbolo : null;
+}
+
+function pintarTabs() {
+  const cont = document.getElementById("tabs");
+  cont.innerHTML = "";
+  secciones.forEach((s, k) => {
+    const b = document.createElement("button");
+    b.textContent = s.nombre;
+    b.className = k === iSec ? "on" : "";
+    b.onclick = () => { iSec = k; comparar = false; elegirPorDefecto(); refrescar(); };
+    cont.appendChild(b);
+  });
+}
+
 function pintarTarjetas() {
   const cont = document.getElementById("cards");
   cont.innerHTML = "";
-  ultimo.forEach(u => {
+  const items = seccion().items;
+  if (!items.length) {
+    cont.innerHTML = '<div class="msg">Todavía no hay datos en esta sección.' +
+      (seccion().nombre === "Empresas" ? "<br>Añade empresas en actualizar_datos.py." : "") + "</div>";
+    return;
+  }
+  items.forEach(u => {
     const b = document.createElement("button");
-    b.className = "card" + (!modoTodos && u.simbolo === seleccion ? " sel" : "");
-    const cls = u.variacion_pct >= 0 ? "up" : "down";
-    const signo = u.variacion_pct >= 0 ? "+" : "";
-    b.innerHTML = '<div class="n">' + u.nombre + '</div><div class="v">' + fmt(u.valor) +
-      '</div><div class="c ' + cls + '">' + signo + fmt(u.variacion_pct) + ' %</div>';
-    b.onclick = () => { seleccion = u.simbolo; modoTodos = false; refrescar(); };
+    b.className = "card" + (!comparar && u.simbolo === seleccion ? " sel" : "");
+    const cls = u.variacion >= 0 ? "up" : "down";
+    const signo = u.variacion >= 0 ? "+" : "";
+    const valor = fmt(u.valor) + (u.tasa ? " %" : "");
+    const delta = signo + fmt(u.variacion, u.tasa ? 1 : 2) + (u.tasa ? " pb" : " %");
+    b.innerHTML = '<div class="n">' + u.nombre + '</div><div class="v">' + valor +
+      '</div><div class="c ' + cls + '">' + delta + '</div><div class="d">' + fechaCorta(u.fecha) + "</div>";
+    b.onclick = () => { seleccion = u.simbolo; comparar = false; refrescar(); };
     cont.appendChild(b);
   });
-  document.getElementById("todos").classList.toggle("on", modoTodos);
 }
 
 function pintarRangos() {
@@ -113,35 +146,47 @@ function filasRango() {
 }
 
 function pintarGrafico() {
+  const items = seccion().items;
+  const detalle = document.getElementById("detalle");
+  detalle.classList.toggle("hide", !items.length);
+  if (grafico) { grafico.destroy(); grafico = null; }
+  if (!items.length) return;
+
+  const btn = document.getElementById("todos");
+  btn.classList.toggle("hide", items.length < 2);
+  btn.classList.toggle("on", comparar);
+  btn.textContent = comparar ? "Volver a un solo indicador" : "Comparar todos los de esta sección";
+
   const datos = filasRango();
   const etiquetas = datos.map(r => r.f);
   const estilo = getComputedStyle(document.documentElement);
   const colTexto = estilo.getPropertyValue("--muted").trim();
   const colLinea = estilo.getPropertyValue("--line").trim();
+  const esTasa = seccion().tasa;
   let datasets;
 
-  if (modoTodos) {
-    datasets = ultimo.map((u, k) => {
+  if (comparar) {
+    datasets = items.map((u, k) => {
       const i = simbolos.indexOf(u.simbolo);
       const serie = datos.map(r => r.v[i]);
       const base = serie.find(x => x !== null);
       return {
         label: u.nombre,
-        data: serie.map(x => x === null ? null : (x / base) * 100),
+        data: serie.map(x => x === null ? null : (esTasa ? x : (x / base) * 100)),
         borderColor: COLORES[k % COLORES.length],
         borderWidth: 2, pointRadius: 0, spanGaps: true
       };
     });
   } else {
     const i = simbolos.indexOf(seleccion);
+    const u = items.find(x => x.simbolo === seleccion);
     datasets = [{
-      label: nombres[seleccion] || seleccion,
+      label: u ? u.nombre : seleccion,
       data: datos.map(r => r.v[i]),
       borderColor: COLORES[0], borderWidth: 2, pointRadius: 0, spanGaps: true
     }];
   }
 
-  if (grafico) grafico.destroy();
   grafico = new Chart(document.getElementById("grafico"), {
     type: "line",
     data: {labels: etiquetas, datasets},
@@ -149,7 +194,7 @@ function pintarGrafico() {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: {mode: "index", intersect: false},
       plugins: {
-        legend: {display: modoTodos, labels: {color: colTexto, boxWidth: 12}},
+        legend: {display: comparar, labels: {color: colTexto, boxWidth: 12}},
         tooltip: {callbacks: {label: c => c.dataset.label + ": " + fmt(c.parsed.y)}}
       },
       scales: {
@@ -160,9 +205,9 @@ function pintarGrafico() {
   });
 }
 
-function refrescar() { pintarTarjetas(); pintarRangos(); pintarGrafico(); }
+function refrescar() { pintarTabs(); pintarTarjetas(); pintarRangos(); pintarGrafico(); }
 
-document.getElementById("todos").onclick = () => { modoTodos = !modoTodos; refrescar(); };
+document.getElementById("todos").onclick = () => { comparar = !comparar; refrescar(); };
 cargar();
 </script>
 </body>
