@@ -28,15 +28,18 @@ EMPRESAS = {
     # "IBE.MC": "Iberdrola",
 }
 BONOS_YAHOO = {"^TNX": "Bono EE.UU. 10 años"}
+BONOS_BDE = {  # identificador propio: (código de serie en el Banco de España, nombre)
+    "ES10Y": ("DPUG0B1F0ZP", "Bono España 10 años"),
+    "DE10Y": ("DPUDNBBN308", "Bono Alemania 10 años"),
+}
 BONOS_STOOQ = {  # identificador propio: (código en Stooq, nombre)
-    "ES10Y": ("10yesy.b", "Bono España 10 años"),
     "FR10Y": ("10yfry.b", "Bono Francia 10 años"),
-    "DE10Y": ("10ydey.b", "Bono Alemania 10 años"),
 }
 EURIBOR_BCE = {"EURIBOR12M": ("EURIBOR1YD_", "Euríbor 12 meses")}
 
 YAHOO = {**ACTIVOS, **BURSATILES, **EMPRESAS, **BONOS_YAHOO}
 NOMBRES = dict(YAHOO)
+NOMBRES.update({k: v[1] for k, v in BONOS_BDE.items()})
 NOMBRES.update({k: v[1] for k, v in BONOS_STOOQ.items()})
 NOMBRES.update({k: v[1] for k, v in EURIBOR_BCE.items()})
 
@@ -44,7 +47,7 @@ NOMBRES.update({k: v[1] for k, v in EURIBOR_BCE.items()})
 SECCIONES = [
     ("Activos", list(ACTIVOS), False),
     ("Índices bursátiles", list(BURSATILES), False),
-    ("Bonos y tipos", [*BONOS_YAHOO, *BONOS_STOOQ, *EURIBOR_BCE], True),
+    ("Bonos y tipos", [*BONOS_YAHOO, "ES10Y", "FR10Y", "DE10Y", *EURIBOR_BCE], True),
     ("Empresas", list(EMPRESAS), False),
 ]
 # --------------------------------------------------------------------------
@@ -71,6 +74,31 @@ def yahoo(simbolos, periodo):
     if isinstance(df, pd.Series):
         df = df.to_frame(simbolos[0])
     return limpiar(df)
+
+
+BDE_URL = "https://www.bde.es/webbe/es/estadisticas/compartido/datos/csv/uoi_sindi.csv"
+MESES = {"ENE": 1, "FEB": 2, "MAR": 3, "ABR": 4, "MAY": 5, "JUN": 6,
+         "JUL": 7, "AGO": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DIC": 12}
+
+
+def bde(series):
+    """Banco de España: indicadores diarios (bonos a 10 años de España y Alemania)."""
+    r = requests.get(BDE_URL, headers=UA, timeout=120)
+    r.raise_for_status()
+    df = pd.read_csv(io.StringIO(r.content.decode("latin-1")))
+    col_fecha = df.columns[0]
+    # Las filas de datos empiezan por una fecha tipo "03 ENE 2000"
+    df = df[df[col_fecha].astype(str).str.match(r"^\d{2} [A-Z]{3} \d{4}$")]
+    texto = df[col_fecha].astype(str)
+    fechas = pd.to_datetime(pd.DataFrame({
+        "year": texto.str[7:].astype(int),
+        "month": texto.str[3:6].map(MESES).astype(int),
+        "day": texto.str[:2].astype(int),
+    }))
+    salida = pd.DataFrame(index=pd.DatetimeIndex(fechas))
+    for simbolo, (codigo, _) in series.items():
+        salida[simbolo] = pd.to_numeric(df[codigo], errors="coerce").values
+    return limpiar(salida)
 
 
 def stooq(codigo, simbolo):
@@ -136,6 +164,7 @@ def main():
     nuevos = [s for s in YAHOO if s not in ya]
     partes = [intentar("Yahoo (actualización)", yahoo, ya, "1mo"),
               intentar("Yahoo (histórico)", yahoo, nuevos, "max")]
+    partes.append(intentar("Banco de España (bonos ES y DE)", bde, BONOS_BDE))
     for simbolo, (codigo, _) in BONOS_STOOQ.items():
         partes.append(intentar(simbolo, stooq, codigo, simbolo))
     for simbolo, (clave, _) in EURIBOR_BCE.items():
