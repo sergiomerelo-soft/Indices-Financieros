@@ -7,19 +7,19 @@
         {
           "simbolo": "GC=F",
           "nombre": "Oro",
-          "fecha": "2026-11-20",
-          "valor": 3515.3999,
+          "fecha": "2026-11-22",
+          "valor": 3569.7,
           "tasa": false,
-          "variacion": -4.62,
+          "variacion": 1.54,
           "unidad": "%"
         },
         {
           "simbolo": "BTC-USD",
           "nombre": "Bitcoin",
           "fecha": "2026-11-22",
-          "valor": 60726.1289,
+          "valor": 61229.0195,
           "tasa": false,
-          "variacion": 1.05,
+          "variacion": 1.89,
           "unidad": "%"
         }
       ]
