@@ -9,38 +9,42 @@
 <title>Índices financieros</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
-:root{--bg:#f6f7f9;--card:#ffffff;--text:#111827;--muted:#6b7280;--up:#15803d;--down:#b91c1c;--accent:#2563eb;--line:#e5e7eb}
-@media (prefers-color-scheme: dark){:root{--bg:#0f172a;--card:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--up:#4ade80;--down:#f87171;--accent:#60a5fa;--line:#334155}}
-*{box-sizing:border-box}
+:root{--bg:#f4f5f8;--card:#ffffff;--text:#0f172a;--muted:#6b7280;--up:#16a34a;--down:#dc2626;--accent:#2563eb;--line:#e5e7eb;--sombra:0 1px 2px rgba(15,23,42,.06),0 4px 14px rgba(15,23,42,.06)}
+@media (prefers-color-scheme: dark){:root{--bg:#0b1120;--card:#161f33;--text:#f1f5f9;--muted:#94a3b8;--up:#4ade80;--down:#f87171;--accent:#60a5fa;--line:#26324a;--sombra:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25)}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
-body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));max-width:720px;margin:0 auto}
-h1{font-size:20px;margin:6px 0 2px}
-.sub{color:var(--muted);font-size:13px;margin-bottom:12px}
-.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
-.tabs button{flex:1 0 auto;padding:9px 12px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:999px;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}
-.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.card{background:var(--card);border:2px solid transparent;border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;color:inherit;font:inherit}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:max(18px,env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));max-width:720px;margin:0 auto}
+h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:8px 0 2px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;justify-content:space-around;background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;color:var(--muted);font:inherit;font-size:11px;font-weight:600;cursor:pointer;padding:4px 2px;transition:color .2s}
+.tabs button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
+.tabs button.on{color:var(--accent)}
+.tabs button.on svg{transform:translateY(-2px) scale(1.08)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--card);border:1.5px solid transparent;border-radius:18px;padding:12px 12px 8px;cursor:pointer;text-align:left;color:inherit;font:inherit;box-shadow:var(--sombra);animation:aparece .4s ease both;transition:transform .15s,border-color .2s}
+.card:active{transform:scale(.97)}
 .card.sel{border-color:var(--accent)}
-.card .n{font-size:12px;color:var(--muted)}
-.card .v{font-size:18px;font-weight:600;margin-top:2px}
-.card .c{font-size:13px;font-weight:600;margin-top:2px}
+.card .n{font-size:12px;color:var(--muted);font-weight:500}
+.card .v{font-size:19px;font-weight:700;letter-spacing:-.01em;margin-top:3px}
+.card .c{display:inline-block;font-size:12px;font-weight:700;margin-top:5px;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,currentColor 14%,transparent)}
+.card svg.spark{display:block;width:100%;height:34px;margin-top:6px}
 .card .d{font-size:11px;color:var(--muted);margin-top:2px}
+@keyframes aparece{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .up{color:var(--up)}.down{color:var(--down)}
-.bar{display:flex;gap:6px;margin:16px 0 8px;flex-wrap:wrap}
-.bar button{flex:1;min-width:48px;padding:8px 6px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
-.bar button.on{background:var(--accent);border-color:var(--accent);color:#fff}
-.chart{background:var(--card);border-radius:12px;padding:10px;height:340px;position:relative}
-.all{width:100%;margin-top:10px;padding:10px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;font:inherit;font-size:14px;cursor:pointer}
-.all.on{background:var(--accent);border-color:var(--accent);color:#fff}
-.msg{padding:20px;color:var(--muted);text-align:center;grid-column:1/-1}
-.hide{display:none}
-.lectura{background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:14px;font-weight:600;min-height:40px;line-height:1.4}
-.pista{color:var(--muted);font-size:12px;text-align:center;margin-top:8px}
+.bar,.monedas{display:flex;gap:4px;background:var(--card);padding:4px;border-radius:14px;box-shadow:var(--sombra)}
+.bar{margin:18px 0 10px}
+.monedas{margin-bottom:14px}
+.bar button,.monedas button{flex:1;min-width:0;padding:8px 6px;border:0;background:none;color:var(--muted);border-radius:10px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .2s,color .2s}
+.bar button.on,.monedas button.on{background:var(--accent);color:#fff}
+.lectura{background:var(--card);border-radius:14px;padding:11px 14px;margin-bottom:10px;font-size:14px;font-weight:600;min-height:42px;line-height:1.4;box-shadow:var(--sombra)}
+.chart{background:var(--card);border-radius:18px;padding:12px;height:340px;position:relative;box-shadow:var(--sombra)}
 .chart canvas{touch-action:pan-y}
-.monedas{display:flex;gap:6px;margin-bottom:12px}
-.monedas button{flex:1;padding:8px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
-.monedas button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pista{color:var(--muted);font-size:12px;text-align:center;margin-top:10px}
+.all{width:100%;margin-top:12px;padding:12px;border:0;background:var(--card);color:var(--accent);border-radius:14px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--sombra)}
+.all.on{background:var(--accent);color:#fff}
+.msg{padding:24px;color:var(--muted);text-align:center;grid-column:1/-1}
+.hide{display:none}
 </style>
 </head>
 <body>
@@ -150,16 +154,40 @@ function elegirPorDefecto() {
   if (!items.find(i => i.simbolo === seleccion)) seleccion = items.length ? items[0].simbolo : null;
 }
 
+const ICONOS = {
+  "Activos": ['<path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20"/>', "Activos"],
+  "Índices bursátiles": ['<polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/>', "Bolsa"],
+  "Bonos y tipos": ['<path d="M3 21h18M5 21V10M9 21V10M15 21V10M19 21V10M2 10l10-6 10 6"/>', "Bonos"],
+  "Empresas": ['<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/>', "Empresas"]
+};
+
 function pintarTabs() {
   const cont = document.getElementById("tabs");
   cont.innerHTML = "";
   secciones.forEach((s, k) => {
+    const [svg, texto] = ICONOS[s.nombre] || ['<circle cx="12" cy="12" r="8"/>', s.nombre];
     const b = document.createElement("button");
-    b.textContent = s.nombre;
+    b.innerHTML = '<svg viewBox="0 0 24 24">' + svg + "</svg><span>" + texto + "</span>";
     b.className = k === iSec ? "on" : "";
-    b.onclick = () => { iSec = k; comparar = false; elegirPorDefecto(); refrescar(); };
+    b.onclick = () => { iSec = k; comparar = false; elegirPorDefecto(); refrescar(); window.scrollTo(0, 0); };
     cont.appendChild(b);
   });
+}
+
+// Mini-gráfico de tendencia de cada tarjeta (últimos 30 datos)
+function spark(u) {
+  const i = simbolos.indexOf(u.simbolo), base = baseFilas(), v = [];
+  for (let k = base.length - 1; k >= 0 && v.length < 30; k--) {
+    const x = base[k].v[i];
+    if (x !== null) v.unshift(x);
+  }
+  if (v.length < 2) return "";
+  const min = Math.min(...v), max = Math.max(...v), r = (max - min) || 1;
+  const pts = v.map((x, k) => (k / (v.length - 1) * 100).toFixed(1) + "," + (30 - ((x - min) / r) * 26).toFixed(1));
+  const col = v[v.length - 1] >= v[0] ? "var(--up)" : "var(--down)";
+  return '<svg class="spark" viewBox="0 0 100 34" preserveAspectRatio="none"><polygon points="0,34 ' + pts.join(" ") +
+    ' 100,34" fill="' + col + '" opacity=".12"/><polyline points="' + pts.join(" ") + '" fill="none" stroke="' + col +
+    '" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>';
 }
 
 function pintarMonedas() {
@@ -186,15 +214,16 @@ function pintarTarjetas() {
       (seccion().nombre === "Empresas" ? "<br>Añade empresas en actualizar_datos.py." : "") + "</div>";
     return;
   }
-  items.forEach(u => {
+  items.forEach((u, k) => {
     const b = document.createElement("button");
+    b.style.animationDelay = (k * 40) + "ms";
     b.className = "card" + (!comparar && u.simbolo === seleccion ? " sel" : "");
     const cls = u.variacion >= 0 ? "up" : "down";
     const signo = u.variacion >= 0 ? "+" : "";
     const valor = fmt(u.valor, u.decimales || 2) + simboloDe(u);
     const delta = signo + fmt(u.variacion, u.tasa ? 1 : 2) + (u.tasa ? " pb" : " %");
     b.innerHTML = '<div class="n">' + u.nombre + '</div><div class="v">' + valor +
-      '</div><div class="c ' + cls + '">' + delta + '</div><div class="d">' + fechaCorta(u.fecha) + "</div>";
+      '</div><div class="c ' + cls + '">' + delta + '</div>' + spark(u) + '<div class="d">' + fechaCorta(u.fecha) + "</div>";
     b.onclick = () => { seleccion = u.simbolo; comparar = false; refrescar(); };
     cont.appendChild(b);
   });
@@ -250,7 +279,7 @@ function pintarGrafico() {
         label: u.nombre,
         data: serie.map(x => x === null ? null : (esTasa ? x : (x / base) * 100)),
         borderColor: COLORES[k % COLORES.length],
-        borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 20, spanGaps: true
+        borderWidth: 2, tension: 0.25, pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 20, spanGaps: true
       };
     });
   } else {
@@ -258,10 +287,24 @@ function pintarGrafico() {
     const u = items.find(x => x.simbolo === seleccion);
     decimales = (u && u.decimales) || 2;
     unidad = u ? simboloDe(u) : "";
+    const serie = datos.map(r => r.v[i]);
+    const validos = serie.filter(x => x !== null);
+    const sube = validos.length < 2 || validos[validos.length - 1] >= validos[0];
+    const col = estilo.getPropertyValue(sube ? "--up" : "--down").trim();
     datasets = [{
       label: u ? u.nombre : seleccion,
-      data: datos.map(r => r.v[i]),
-      borderColor: COLORES[0], borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 20, spanGaps: true
+      data: serie,
+      borderColor: col, borderWidth: 2.5, tension: 0.25,
+      pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 20, pointBackgroundColor: col,
+      spanGaps: true, fill: true,
+      backgroundColor: c => {
+        const a = c.chart.chartArea;
+        if (!a) return col + "22";
+        const g = c.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+        g.addColorStop(0, col + "55");
+        g.addColorStop(1, col + "00");
+        return g;
+      }
     }];
   }
 
@@ -284,7 +327,7 @@ function pintarGrafico() {
     data: {labels: etiquetas, datasets},
     plugins: [cruz],
     options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
+      responsive: true, maintainAspectRatio: false, animation: {duration: 600, easing: "easeOutCubic"},
       interaction: {mode: "index", intersect: false},
       onHover: (ev, els) => mostrar(els.length ? els[0].index : ultimoDato(), els.length > 0),
       plugins: {
