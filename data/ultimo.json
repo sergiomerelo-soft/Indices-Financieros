@@ -3,30 +3,62 @@
     {
       "nombre": "Activos",
       "tasa": false,
+      "convertible": true,
       "items": [
         {
           "simbolo": "GC=F",
           "nombre": "Oro",
-          "fecha": "2026-11-22",
-          "valor": 3569.7,
+          "fecha": "2026-11-23",
+          "valor": 3619.3,
           "tasa": false,
-          "variacion": 1.54,
-          "unidad": "%"
+          "variacion": 1.39,
+          "unidad": "%",
+          "moneda": "USD",
+          "convertible": true,
+          "decimales": 2
         },
         {
           "simbolo": "BTC-USD",
           "nombre": "Bitcoin",
-          "fecha": "2026-11-22",
-          "valor": 61229.0195,
+          "fecha": "2026-11-23",
+          "valor": 61380.2188,
           "tasa": false,
-          "variacion": 1.89,
-          "unidad": "%"
+          "variacion": 0.25,
+          "unidad": "%",
+          "moneda": "USD",
+          "convertible": true,
+          "decimales": 2
+        },
+        {
+          "simbolo": "BZ=F",
+          "nombre": "Petróleo Brent",
+          "fecha": "2026-11-23",
+          "valor": 89.88,
+          "tasa": false,
+          "variacion": -2.91,
+          "unidad": "%",
+          "moneda": "USD",
+          "convertible": true,
+          "decimales": 2
+        },
+        {
+          "simbolo": "EURUSD=X",
+          "nombre": "Euro / Dólar",
+          "fecha": "2026-11-23",
+          "valor": 1.0999,
+          "tasa": false,
+          "variacion": 0.26,
+          "unidad": "%",
+          "moneda": null,
+          "convertible": false,
+          "decimales": 4
         }
       ]
     },
     {
       "nombre": "Índices bursátiles",
       "tasa": false,
+      "convertible": false,
       "items": [
         {
           "simbolo": "^GSPC",
@@ -35,7 +67,10 @@
           "valor": 6910.3901,
           "tasa": false,
           "variacion": -3.7,
-          "unidad": "%"
+          "unidad": "%",
+          "moneda": null,
+          "convertible": false,
+          "decimales": 2
         },
         {
           "simbolo": "^IXIC",
@@ -44,7 +79,10 @@
           "valor": 22617.7305,
           "tasa": false,
           "variacion": -5.28,
-          "unidad": "%"
+          "unidad": "%",
+          "moneda": null,
+          "convertible": false,
+          "decimales": 2
         },
         {
           "simbolo": "^DJI",
@@ -53,7 +91,10 @@
           "valor": 48147.3281,
           "tasa": false,
           "variacion": -1.93,
-          "unidad": "%"
+          "unidad": "%",
+          "moneda": null,
+          "convertible": false,
+          "decimales": 2
         },
         {
           "simbolo": "^IBEX",
@@ -62,13 +103,17 @@
           "valor": 18873.0996,
           "tasa": false,
           "variacion": -1.63,
-          "unidad": "%"
+          "unidad": "%",
+          "moneda": null,
+          "convertible": false,
+          "decimales": 2
         }
       ]
     },
     {
       "nombre": "Bonos y tipos",
       "tasa": true,
+      "convertible": false,
       "items": [
         {
           "simbolo": "^TNX",
@@ -77,7 +122,10 @@
           "valor": 4.912,
           "tasa": true,
           "variacion": -14.0,
-          "unidad": "pb"
+          "unidad": "pb",
+          "moneda": null,
+          "convertible": false,
+          "decimales": 2
         },
         {
           "simbolo": "ES10Y",
@@ -86,7 +134,10 @@
           "valor": 3.95,
           "tasa": true,
           "variacion": 4.0,
-          "unidad": "pb"
+          "unidad": "pb",
+          "moneda": null,
+          "convertible": false,
+          "decimales": 2
         },
         {
           "simbolo": "DE10Y",
@@ -95,7 +146,10 @@
           "valor": 3.4,
           "tasa": true,
           "variacion": 0.0,
-          "unidad": "pb"
+          "unidad": "pb",
+          "moneda": null,
+          "convertible": false,
+          "decimales": 2
         },
         {
           "simbolo": "EURIBOR12M",
@@ -104,14 +158,103 @@
           "valor": 3.2386,
           "tasa": true,
           "variacion": -0.8,
-          "unidad": "pb"
+          "unidad": "pb",
+          "moneda": null,
+          "convertible": false,
+          "decimales": 2
         }
       ]
     },
     {
       "nombre": "Empresas",
       "tasa": false,
-      "items": []
+      "convertible": false,
+      "items": [
+        {
+          "simbolo": "SPCX",
+          "nombre": "SpaceX",
+          "fecha": "2026-11-20",
+          "valor": 127.79,
+          "tasa": false,
+          "variacion": -7.69,
+          "unidad": "%",
+          "moneda": "USD",
+          "convertible": false,
+          "decimales": 2
+        },
+        {
+          "simbolo": "ANT",
+          "nombre": "Anthropic",
+          "fecha": "2026-11-20",
+          "valor": 88.91,
+          "tasa": false,
+          "variacion": -8.5,
+          "unidad": "%",
+          "moneda": "USD",
+          "convertible": false,
+          "decimales": 2
+        },
+        {
+          "simbolo": "TEF.MC",
+          "nombre": "Telefónica",
+          "fecha": "2026-11-20",
+          "valor": 3.363,
+          "tasa": false,
+          "variacion": 0.21,
+          "unidad": "%",
+          "moneda": "EUR",
+          "convertible": false,
+          "decimales": 2
+        },
+        {
+          "simbolo": "NTGY.MC",
+          "nombre": "Naturgy",
+          "fecha": "2026-11-20",
+          "valor": 30.02,
+          "tasa": false,
+          "variacion": 0.07,
+          "unidad": "%",
+          "moneda": "EUR",
+          "convertible": false,
+          "decimales": 2
+        },
+        {
+          "simbolo": "CABK.MC",
+          "nombre": "CaixaBank",
+          "fecha": "2026-11-20",
+          "valor": 11.45,
+          "tasa": false,
+          "variacion": -2.18,
+          "unidad": "%",
+          "moneda": "EUR",
+          "convertible": false,
+          "decimales": 2
+        },
+        {
+          "simbolo": "ENG.MC",
+          "nombre": "Enagás",
+          "fecha": "2026-11-20",
+          "valor": 17.67,
+          "tasa": false,
+          "variacion": 0.8,
+          "unidad": "%",
+          "moneda": "EUR",
+          "convertible": false,
+          "decimales": 2
+        },
+        {
+          "simbolo": "RED.MC",
+          "nombre": "Redeia",
+          "fecha": "2026-11-20",
+          "valor": 16.2,
+          "tasa": false,
+          "variacion": 1.76,
+          "unidad": "%",
+          "moneda": "EUR",
+          "convertible": false,
+          "decimales": 2
+        }
+      ]
     }
   ]
 }
