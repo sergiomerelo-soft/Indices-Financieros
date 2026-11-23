@@ -17,15 +17,23 @@ import requests
 import yfinance as yf
 
 # ----------------------------- CONFIGURACIÓN -----------------------------
-ACTIVOS = {"GC=F": "Oro", "BTC-USD": "Bitcoin"}
+ACTIVOS = {"GC=F": "Oro", "BTC-USD": "Bitcoin", "BZ=F": "Petróleo Brent"}
+CAMBIO = {"EURUSD=X": "Euro / Dólar"}  # dólares por 1 euro
+CONVERTIBLES = ["GC=F", "BTC-USD", "BZ=F"]  # se pueden ver en euros o en dólares
 BURSATILES = {
     "^GSPC": "S&P 500",
     "^IXIC": "Nasdaq",
     "^DJI": "Dow Jones",
     "^IBEX": "IBEX 35",
 }
-EMPRESAS = {
-    # "IBE.MC": "Iberdrola",
+EMPRESAS = {  # código de Yahoo Finance: nombre
+    "SPCX": "SpaceX",
+    "ANT": "Anthropic",
+    "TEF.MC": "Telefónica",
+    "NTGY.MC": "Naturgy",
+    "CABK.MC": "CaixaBank",
+    "ENG.MC": "Enagás",
+    "RED.MC": "Redeia",
 }
 BONOS_YAHOO = {"^TNX": "Bono EE.UU. 10 años"}
 BONOS_BDE = {  # identificador propio: (código de serie en el Banco de España, nombre)
@@ -37,18 +45,22 @@ BONOS_STOOQ = {  # identificador propio: (código en Stooq, nombre)
 }
 EURIBOR_BCE = {"EURIBOR12M": ("EURIBOR1YD_", "Euríbor 12 meses")}
 
-YAHOO = {**ACTIVOS, **BURSATILES, **EMPRESAS, **BONOS_YAHOO}
+YAHOO = {**ACTIVOS, **CAMBIO, **BURSATILES, **EMPRESAS, **BONOS_YAHOO}
 NOMBRES = dict(YAHOO)
 NOMBRES.update({k: v[1] for k, v in BONOS_BDE.items()})
 NOMBRES.update({k: v[1] for k, v in BONOS_STOOQ.items()})
 NOMBRES.update({k: v[1] for k, v in EURIBOR_BCE.items()})
 
-# (nombre de la sección, indicadores, ¿son tipos de interés?)
+# Moneda en la que cotiza cada valor (los índices y tipos no llevan moneda)
+MONEDA = {s: "USD" for s in CONVERTIBLES}
+MONEDA.update({s: ("EUR" if s.endswith(".MC") else "USD") for s in EMPRESAS})
+
+# (nombre de la sección, indicadores, ¿son tipos de interés?, ¿admite euros/dólares?)
 SECCIONES = [
-    ("Activos", list(ACTIVOS), False),
-    ("Índices bursátiles", list(BURSATILES), False),
-    ("Bonos y tipos", [*BONOS_YAHOO, "ES10Y", "FR10Y", "DE10Y", *EURIBOR_BCE], True),
-    ("Empresas", list(EMPRESAS), False),
+    ("Activos", [*ACTIVOS, *CAMBIO], False, True),
+    ("Índices bursátiles", list(BURSATILES), False, False),
+    ("Bonos y tipos", [*BONOS_YAHOO, "ES10Y", "FR10Y", "DE10Y", *EURIBOR_BCE], True, False),
+    ("Empresas", list(EMPRESAS), False, False),
 ]
 # --------------------------------------------------------------------------
 
@@ -132,7 +144,7 @@ def intentar(nombre, funcion, *args):
 
 def resumen(datos):
     secciones = []
-    for nombre_sec, simbolos, tasa in SECCIONES:
+    for nombre_sec, simbolos, tasa, convertible in SECCIONES:
         items = []
         for s in simbolos:
             if s not in datos:
@@ -150,8 +162,12 @@ def resumen(datos):
                 "variacion": round((ult - ant) * 100, 1) if tasa
                 else round((ult / ant - 1) * 100, 2),
                 "unidad": "pb" if tasa else "%",
+                "moneda": MONEDA.get(s),
+                "convertible": s in CONVERTIBLES,
+                "decimales": 4 if s in CAMBIO else 2,
             })
-        secciones.append({"nombre": nombre_sec, "tasa": tasa, "items": items})
+        secciones.append({"nombre": nombre_sec, "tasa": tasa,
+                          "convertible": convertible, "items": items})
     return {"secciones": secciones}
 
 
