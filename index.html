@@ -44,6 +44,22 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:8px 0 2px}
 .all{width:100%;margin-top:12px;padding:12px;border:0;background:var(--card);color:var(--accent);border-radius:14px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--sombra)}
 .all.on{background:var(--accent);color:#fff}
 .msg{padding:24px;color:var(--muted);text-align:center;grid-column:1/-1}
+.lista{display:block}
+.cab,.fila{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1.1fr) repeat(3,minmax(0,.85fr));gap:4px;align-items:center}
+.cab{padding:0 12px 6px;color:var(--muted);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+.cab .ord{cursor:pointer}
+.cab .act{color:var(--accent)}
+.grupo{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 2px 8px}
+.cab span:not(:first-child){text-align:right}
+.fila{width:100%;background:var(--card);border:1.5px solid transparent;border-radius:14px;padding:12px;margin-bottom:8px;box-shadow:var(--sombra);color:inherit;font:inherit;text-align:left;cursor:pointer;animation:aparece .4s ease both;transition:transform .15s,border-color .2s}
+.fila:active{transform:scale(.98)}
+.fila.sel{border-color:var(--accent)}
+.fila .nom b{display:block;font-size:14px}
+.fila .nom small{color:var(--muted);font-size:11px}
+.fila .num{text-align:right;font-size:12px;font-weight:700}
+.fila .num small{display:block;font-size:11px;font-weight:600}
+.nota{color:var(--muted);font-size:11px;margin:4px 2px 12px}
+#detalle{margin-bottom:12px}
 .hide{display:none}
 </style>
 </head>
@@ -87,6 +103,7 @@ const cruz = {
   }
 };
 const seccion = () => secciones[iSec] || {items: []};
+const esLista = () => seccion().nombre === "Empresas";
 const enEuros = () => moneda === "EUR" && seccion().convertible;
 const baseFilas = () => enEuros() ? filasEUR : filas;
 
@@ -151,6 +168,7 @@ async function cargar() {
 
 function elegirPorDefecto() {
   const items = seccion().items;
+  if (esLista()) { if (!items.find(i => i.simbolo === seleccion)) seleccion = null; return; }
   if (!items.find(i => i.simbolo === seleccion)) seleccion = items.length ? items[0].simbolo : null;
 }
 
@@ -205,8 +223,103 @@ function pintarMonedas() {
   });
 }
 
+const pct = (v, aprox, unidad) => (v === null || v === undefined) ? '<span class="num">—</span>' :
+  '<span class="num ' + (v >= 0 ? "up" : "down") + '">' + (v >= 0 ? "+" : "") + fmt(v, 1) + (unidad || "%") + (aprox ? "*" : "") + "</span>";
+
+const serieDe = i => { const s = []; filas.forEach(r => { if (r.v[i] !== null) s.push({f: r.f, x: r.v[i]}); }); return s; };
+const antes = (serie, f) => { let r = null; for (const p of serie) { if (p.f <= f) r = p; else break; } return r; };
+
+// YTD, 1 año y rendimiento relativo frente al IBEX 35 (mismo periodo que el YTD)
+function metricas(simbolo) {
+  const serie = serieDe(simbolos.indexOf(simbolo));
+  if (serie.length < 2) return {ytd: null, anio: null, rel: null};
+  const ult = serie[serie.length - 1], anio = ult.f.slice(0, 4);
+  let base = antes(serie, (Number(anio) - 1) + "-12-31"), aprox = false;
+  if (!base) { base = serie.find(p => p.f.slice(0, 4) === anio); aprox = true; }
+  const ytd = base && base.f !== ult.f ? (ult.x / base.x - 1) * 100 : null;
+  const hace = antes(serie, (Number(anio) - 1) + ult.f.slice(4));
+  let rel = null;
+  const ib = simbolos.indexOf("^IBEX");
+  if (ytd !== null && ib >= 0) {
+    const si = serieDe(ib), b0 = antes(si, base.f), b1 = antes(si, ult.f);
+    if (b0 && b1 && b0.f !== b1.f) rel = ytd - (b1.x / b0.x - 1) * 100;
+  }
+  return {ytd, ytdAprox: aprox && ytd !== null, anio: hace ? (ult.x / hace.x - 1) * 100 : null, rel};
+}
+
+let orden = {col: null, dir: 1};
+const COLS = [["nombre", "Empresa"], ["precio", "Precio"], ["ytd", "YTD"], ["anio", "1 año"], ["rel", "vs IBEX"]];
+
+function pintarLista(cont, items) {
+  const ms = {};
+  items.forEach(u => { ms[u.simbolo] = metricas(u.simbolo); });
+
+  const cab = document.createElement("div");
+  cab.className = "cab";
+  COLS.forEach(([c, texto]) => {
+    const sp = document.createElement("span");
+    const activo = orden.col === c;
+    const flecha = c === "nombre" ? (orden.dir === 1 ? " ▲" : " ▼") : (orden.dir === 1 ? " ▼" : " ▲");
+    sp.textContent = texto + (activo ? flecha : "");
+    if (c !== "precio") {
+      sp.className = "ord" + (activo ? " act" : "");
+      sp.onclick = () => {
+        if (orden.col !== c) orden = {col: c, dir: 1};
+        else if (orden.dir === 1) orden.dir = -1;
+        else orden = {col: null, dir: 1};
+        refrescar();
+      };
+    }
+    cab.appendChild(sp);
+  });
+  cont.appendChild(cab);
+
+  const ordenar = lista => {
+    if (!orden.col) return lista;
+    return lista.slice().sort((a, b) => {
+      if (orden.col === "nombre") return orden.dir * a.nombre.localeCompare(b.nombre, "es");
+      const va = ms[a.simbolo][orden.col], vb = ms[b.simbolo][orden.col];
+      if (va === null && vb === null) return 0;
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return orden.dir * (vb - va);
+    });
+  };
+
+  const grupos = [];
+  items.forEach(u => { const g = u.grupo || "Otras"; if (!grupos.includes(g)) grupos.push(g); });
+  let n = 0;
+  grupos.forEach(g => {
+    const t = document.createElement("div");
+    t.className = "grupo";
+    t.textContent = g;
+    cont.appendChild(t);
+    ordenar(items.filter(u => (u.grupo || "Otras") === g)).forEach(u => {
+      const m = ms[u.simbolo];
+      const fila = document.createElement("button");
+      fila.className = "fila" + (u.simbolo === seleccion ? " sel" : "");
+      fila.style.animationDelay = (n++ * 40) + "ms";
+      const cls = u.variacion >= 0 ? "up" : "down";
+      fila.innerHTML = '<span class="nom"><b>' + u.nombre + "</b><small>" + u.simbolo + "</small></span>" +
+        '<span class="num">' + fmt(u.valor, 2) + simboloDe(u) + '<small class="' + cls + '">' +
+        (u.variacion >= 0 ? "+" : "") + fmt(u.variacion, 2) + " %</small></span>" +
+        pct(m.ytd, m.ytdAprox) + pct(m.anio, false) + pct(m.rel, false, "pp");
+      fila.onclick = () => { seleccion = seleccion === u.simbolo ? null : u.simbolo; comparar = false; refrescar(); };
+      cont.appendChild(fila);
+      if (u.simbolo === seleccion) fila.after(document.getElementById("detalle"));
+    });
+  });
+
+  const nota = document.createElement("div");
+  nota.className = "nota";
+  nota.textContent = "Toca una cabecera para ordenar. YTD: desde el último cierre del año anterior. vs IBEX: diferencia del YTD frente al IBEX 35, en puntos (pp). * Desde su salida a bolsa. — Sin histórico suficiente.";
+  cont.appendChild(nota);
+}
+
 function pintarTarjetas() {
   const cont = document.getElementById("cards");
+  cont.after(document.getElementById("detalle"));
+  cont.className = esLista() ? "lista" : "grid";
   cont.innerHTML = "";
   const items = itemsVista();
   if (!items.length) {
@@ -214,6 +327,7 @@ function pintarTarjetas() {
       (seccion().nombre === "Empresas" ? "<br>Añade empresas en actualizar_datos.py." : "") + "</div>";
     return;
   }
+  if (esLista()) { pintarLista(cont, items); return; }
   items.forEach((u, k) => {
     const b = document.createElement("button");
     b.style.animationDelay = (k * 40) + "ms";
@@ -253,12 +367,12 @@ function filasRango() {
 function pintarGrafico() {
   const items = itemsVista();
   const detalle = document.getElementById("detalle");
-  detalle.classList.toggle("hide", !items.length);
+  detalle.classList.toggle("hide", !items.length || (esLista() && !seleccion));
   if (grafico) { grafico.destroy(); grafico = null; }
-  if (!items.length) return;
+  if (!items.length || (esLista() && !seleccion)) return;
 
   const btn = document.getElementById("todos");
-  btn.classList.toggle("hide", items.length < 2);
+  btn.classList.toggle("hide", items.length < 2 || esLista());
   btn.classList.toggle("on", comparar);
   btn.textContent = comparar ? "Volver a un solo indicador" : "Comparar todos los de esta sección";
 
