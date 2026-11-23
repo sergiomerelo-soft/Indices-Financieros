@@ -63,7 +63,11 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:8px 0 2px}
 .edbar{display:flex;justify-content:flex-end;margin-bottom:8px}
 .edbar button{border:0;background:var(--card);color:var(--accent);padding:8px 14px;border-radius:999px;font:inherit;font-size:13px;font-weight:600;box-shadow:var(--sombra);cursor:pointer}
 #editor{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
-#editor.hide{display:none}
+#editorhtml,body{overscroll-behavior-y:contain}
+.monedas button{display:flex;flex-direction:column;align-items:center;gap:1px}
+.monedas small{font-size:11px;font-weight:500;opacity:.85}
+#ptr{position:fixed;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translate(-50%,-70px);opacity:0;z-index:40;background:var(--card);color:var(--text);box-shadow:var(--sombra);padding:8px 16px;border-radius:999px;font-size:13px;font-weight:600;pointer-events:none;transition:transform .25s,opacity .25s;white-space:nowrap}
+.hide{display:none}
 .hoja{background:var(--bg);width:100%;max-width:720px;max-height:88vh;overflow:auto;border-radius:20px 20px 0 0;padding:16px 16px calc(24px + env(safe-area-inset-bottom))}
 .hoja-cab{display:flex;justify-content:space-between;align-items:center;font-size:17px;margin-bottom:10px}
 .hoja-cab button{border:0;background:none;color:var(--muted);font-size:20px;cursor:pointer}
@@ -83,6 +87,7 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:8px 0 2px}
 </style>
 </head>
 <body>
+<div id="ptr"></div>
 <h1>Índices financieros</h1>
 <div class="sub" id="sub">Cargando…</div>
 <div class="tabs" id="tabs"></div>
@@ -188,9 +193,13 @@ async function cargar() {
     iSec = kPrev >= 0 ? kPrev : Math.max(0, secciones.findIndex(s => s.items.length));
     elegirPorDefecto();
     refrescar();
+    return true;
   } catch (e) {
-    document.getElementById("sub").textContent = "";
-    document.getElementById("cards").innerHTML = '<div class="msg">No se han podido cargar los datos.</div>';
+    if (!secciones.length) {
+      document.getElementById("sub").textContent = "";
+      document.getElementById("cards").innerHTML = '<div class="msg">No se han podido cargar los datos.</div>';
+    }
+    return false;
   }
 }
 
@@ -242,9 +251,11 @@ function pintarMonedas() {
   cont.classList.toggle("hide", !visible);
   cont.innerHTML = "";
   if (!visible) return;
-  [["USD", "Dólares ($)"], ["EUR", "Euros (€)"]].forEach(([m, texto]) => {
+  const fx = (seccion().items.find(i => i.simbolo === "EURUSD=X") || {}).valor;
+  [["USD", "Dólares ($)", fx ? "1 $ = " + fmt(1 / fx, 4) + " €" : ""],
+   ["EUR", "Euros (€)", fx ? "1 € = " + fmt(fx, 4) + " $" : ""]].forEach(([m, texto, cambio]) => {
     const b = document.createElement("button");
-    b.textContent = texto;
+    b.innerHTML = "<span>" + texto + "</span>" + (cambio ? "<small>" + cambio + "</small>" : "");
     b.className = m === moneda ? "on" : "";
     b.onclick = () => { moneda = m; refrescar(); };
     cont.appendChild(b);
@@ -640,6 +651,54 @@ function pintarEditor() {
 const cerrarEditor = () => document.getElementById("editor").classList.add("hide");
 document.getElementById("edCerrar").onclick = cerrarEditor;
 document.getElementById("editor").onclick = e => { if (e.target.id === "editor") cerrarEditor(); };
+
+// ---------- Tirar hacia abajo para actualizar ----------
+let cargando = false;
+const ptr = document.getElementById("ptr");
+function mostrarPtr(texto, y) {
+  ptr.textContent = texto;
+  ptr.style.transform = "translate(-50%," + y + "px)";
+  ptr.style.opacity = 1;
+}
+function ocultarPtr() {
+  ptr.style.transition = "transform .25s, opacity .25s";
+  ptr.style.transform = "translate(-50%,-70px)";
+  ptr.style.opacity = 0;
+}
+async function actualizar() {
+  cargando = true;
+  ptr.style.transition = "transform .25s, opacity .25s";
+  mostrarPtr("Actualizando…", 6);
+  const ok = await cargar();
+  mostrarPtr(ok ? "✓ " + document.getElementById("sub").textContent : "No se pudo actualizar", 6);
+  setTimeout(() => { ocultarPtr(); cargando = false; }, 1600);
+}
+(function () {
+  const UMBRAL = 70;
+  let y0 = null, dy = 0, tirando = false;
+  const editorAbierto = () => !document.getElementById("editor").classList.contains("hide");
+  document.addEventListener("touchstart", e => {
+    if (window.scrollY > 0 || e.touches.length !== 1 || cargando || editorAbierto() || e.target.closest("canvas")) { y0 = null; return; }
+    y0 = e.touches[0].clientY; dy = 0; tirando = false;
+  }, {passive: true});
+  document.addEventListener("touchmove", e => {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy > 0 && window.scrollY <= 0) {
+      tirando = true;
+      if (e.cancelable) e.preventDefault();
+      ptr.style.transition = "none";
+      mostrarPtr(dy > UMBRAL ? "Suelta para actualizar" : "Tira para actualizar", Math.min(dy * 0.5, 80) - 70);
+      ptr.style.opacity = Math.min(1, dy / UMBRAL);
+    } else if (tirando) { tirando = false; ocultarPtr(); }
+  }, {passive: false});
+  document.addEventListener("touchend", () => {
+    if (y0 === null) return;
+    const listo = tirando && dy > UMBRAL;
+    y0 = null; tirando = false;
+    if (listo) actualizar(); else ocultarPtr();
+  });
+})();
 
 document.getElementById("todos").onclick = () => { comparar = !comparar; refrescar(); };
 cargar();
