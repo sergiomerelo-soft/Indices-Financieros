@@ -1,0 +1,37 @@
+[
+  {
+    "ticker": "CABK.MC",
+    "nombre": "CaixaBank",
+    "grupo": "Bancos"
+  },
+  {
+    "ticker": "NTGY.MC",
+    "nombre": "Naturgy",
+    "grupo": "Utilities"
+  },
+  {
+    "ticker": "ENG.MC",
+    "nombre": "Enagás",
+    "grupo": "Utilities"
+  },
+  {
+    "ticker": "RED.MC",
+    "nombre": "Redeia",
+    "grupo": "Utilities"
+  },
+  {
+    "ticker": "TEF.MC",
+    "nombre": "Telefónica",
+    "grupo": "Tecnológicas"
+  },
+  {
+    "ticker": "SPCX",
+    "nombre": "SpaceX",
+    "grupo": "Tecnológicas"
+  },
+  {
+    "ticker": "ANT",
+    "nombre": "Anthropic",
+    "grupo": "Tecnológicas"
+  }
+]

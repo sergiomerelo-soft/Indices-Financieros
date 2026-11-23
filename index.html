@@ -60,6 +60,25 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:8px 0 2px}
 .fila .num small{display:block;font-size:11px;font-weight:600}
 .nota{color:var(--muted);font-size:11px;margin:4px 2px 12px}
 #detalle{margin-bottom:12px}
+.edbar{display:flex;justify-content:flex-end;margin-bottom:8px}
+.edbar button{border:0;background:var(--card);color:var(--accent);padding:8px 14px;border-radius:999px;font:inherit;font-size:13px;font-weight:600;box-shadow:var(--sombra);cursor:pointer}
+#editor{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+#editor.hide{display:none}
+.hoja{background:var(--bg);width:100%;max-width:720px;max-height:88vh;overflow:auto;border-radius:20px 20px 0 0;padding:16px 16px calc(24px + env(safe-area-inset-bottom))}
+.hoja-cab{display:flex;justify-content:space-between;align-items:center;font-size:17px;margin-bottom:10px}
+.hoja-cab button{border:0;background:none;color:var(--muted);font-size:20px;cursor:pointer}
+.hoja input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);font:inherit;font-size:14px;margin-bottom:8px}
+.btn{width:100%;margin-top:8px;padding:12px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+.btn.sec{background:var(--card);color:var(--accent);box-shadow:var(--sombra)}
+.btn:disabled{opacity:.5}
+.enlace{display:block;margin:14px auto 0;border:0;background:none;color:var(--muted);font:inherit;font-size:12px;text-decoration:underline;cursor:pointer}
+.edfila{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:6px}
+.edfila .i{flex:1;min-width:0}
+.edfila small{display:block;color:var(--muted);font-size:11px}
+.edfila button{border:0;background:none;font-size:18px;cursor:pointer}
+.msgEd{font-size:13px;margin:8px 0;color:var(--muted);line-height:1.5}
+.pasos{padding-left:20px;font-size:13px;color:var(--muted);line-height:1.5}
+.pasos a{color:var(--accent)}
 .hide{display:none}
 </style>
 </head>
@@ -75,6 +94,13 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:8px 0 2px}
   <div class="chart"><canvas id="grafico"></canvas></div>
   <div class="pista">Pasa el cursor o desliza el dedo por el gráfico para ver la fecha y el valor.</div>
   <button class="all" id="todos">Comparar todos los de esta sección</button>
+</div>
+
+<div id="editor" class="hide">
+  <div class="hoja">
+    <div class="hoja-cab"><b>Editar empresas</b><button id="edCerrar" aria-label="Cerrar">✕</button></div>
+    <div id="edCuerpo"></div>
+  </div>
 </div>
 
 <script>
@@ -146,6 +172,7 @@ async function cargar() {
       fetch("data/historico.csv?" + t)
     ]);
     if (!r1.ok || !r2.ok) throw new Error("No se encuentran los datos");
+    const previa = secciones[iSec] && secciones[iSec].nombre;
     secciones = (await r1.json()).secciones;
     const lineas = (await r2.text()).trim().split("\n");
     simbolos = lineas[0].split(",").slice(1);
@@ -157,7 +184,8 @@ async function cargar() {
     document.getElementById("sub").textContent =
       fechas.length ? "Datos hasta el " + fechas[fechas.length - 1] : "";
     prepararEUR();
-    iSec = Math.max(0, secciones.findIndex(s => s.items.length));
+    const kPrev = secciones.findIndex(s => s.nombre === previa);
+    iSec = kPrev >= 0 ? kPrev : Math.max(0, secciones.findIndex(s => s.items.length));
     elegirPorDefecto();
     refrescar();
   } catch (e) {
@@ -250,7 +278,16 @@ function metricas(simbolo) {
 let orden = {col: null, dir: 1};
 const COLS = [["nombre", "Empresa"], ["precio", "Precio"], ["ytd", "YTD"], ["anio", "1 año"], ["rel", "vs IBEX"]];
 
+function botonEditar() {
+  const d = document.createElement("div");
+  d.className = "edbar";
+  d.innerHTML = "<button>✎ Editar lista</button>";
+  d.firstChild.onclick = abrirEditor;
+  return d;
+}
+
 function pintarLista(cont, items) {
+  cont.appendChild(botonEditar());
   const ms = {};
   items.forEach(u => { ms[u.simbolo] = metricas(u.simbolo); });
 
@@ -324,7 +361,8 @@ function pintarTarjetas() {
   const items = itemsVista();
   if (!items.length) {
     cont.innerHTML = '<div class="msg">Todavía no hay datos en esta sección.' +
-      (seccion().nombre === "Empresas" ? "<br>Añade empresas en actualizar_datos.py." : "") + "</div>";
+      (esLista() ? "<br>Añade empresas con el botón Editar lista." : "") + "</div>";
+    if (esLista()) cont.prepend(botonEditar());
     return;
   }
   if (esLista()) { pintarLista(cont, items); return; }
@@ -464,6 +502,144 @@ function pintarGrafico() {
 }
 
 function refrescar() { pintarTabs(); pintarMonedas(); pintarTarjetas(); pintarRangos(); pintarGrafico(); }
+
+// ---------- Editor de la lista de empresas (guarda empresas.json en GitHub) ----------
+const ls = {
+  get: k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
+  set: (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
+};
+const aB64 = t => btoa(unescape(encodeURIComponent(t)));
+const deB64 = t => decodeURIComponent(escape(atob(t.replace(/\s/g, ""))));
+const esc = t => String(t).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const repoActual = () => {
+  const g = ls.get("repo");
+  if (g) return g;
+  const p = location.pathname.split("/")[1];
+  return (location.hostname.endsWith(".github.io") && p) ? location.hostname.split(".")[0] + "/" + p : "";
+};
+const apiUrl = () => "https://api.github.com/repos/" + repoActual() + "/contents/empresas.json";
+const cabeceras = () => ({"Authorization": "Bearer " + ls.get("token"), "Accept": "application/vnd.github+json"});
+const seccionEmpresas = () => secciones.find(s => s.nombre === "Empresas") || {items: []};
+const tickersActuales = () => seccionEmpresas().items.map(i => i.simbolo);
+const listaActual = () => seccionEmpresas().items.map(i => ({ticker: i.simbolo, nombre: i.nombre, grupo: i.grupo || "Otras"}));
+let ed = {borrador: [], sha: null, msg: "", ocupado: false, cargado: false}, sondeo = null;
+
+function errorGitHub(status) {
+  if (status === 401) return "El token no es válido o ha caducado.";
+  if (status === 403 || status === 404) return "El token no tiene permiso para escribir en este repositorio (revisa Contents: Read and write).";
+  if (status === 409 || status === 422) return "La lista cambió mientras la editabas. Ciérrala y ábrela de nuevo.";
+  return "Error de GitHub (" + status + ").";
+}
+
+async function abrirEditor() {
+  document.getElementById("editor").classList.remove("hide");
+  ed.msg = ""; ed.cargado = false;
+  if (!ls.get("token")) { pintarEditor(); return; }
+  await cargarBorrador();
+}
+
+async function cargarBorrador() {
+  if (!repoActual()) { ed.msg = "Indica el repositorio (usuario/repositorio)."; ls.set("token", ""); pintarEditor(); return; }
+  ed.ocupado = true; ed.cargado = false; ed.msg = "Cargando…"; pintarEditor();
+  try {
+    const r = await fetch(apiUrl(), {headers: cabeceras(), cache: "no-store"});
+    if (r.status === 404) { ed.sha = null; ed.borrador = listaActual(); }
+    else if (!r.ok) throw new Error(errorGitHub(r.status));
+    else { const j = await r.json(); ed.sha = j.sha; ed.borrador = JSON.parse(deB64(j.content)); }
+    ed.cargado = true; ed.msg = "";
+  } catch (e) { ed.msg = e.message === "Failed to fetch" ? "No se pudo conectar con GitHub." : e.message; }
+  ed.ocupado = false; pintarEditor();
+}
+
+async function guardarLista() {
+  ed.ocupado = true; ed.msg = "Guardando…"; pintarEditor();
+  try {
+    const body = {message: "Actualizar lista de empresas", content: aB64(JSON.stringify(ed.borrador, null, 2) + "\n")};
+    if (ed.sha) body.sha = ed.sha;
+    const r = await fetch(apiUrl(), {method: "PUT", headers: Object.assign({"Content-Type": "application/json"}, cabeceras()), body: JSON.stringify(body)});
+    if (!r.ok) throw new Error(errorGitHub(r.status));
+    ed.sha = (await r.json()).content.sha;
+    ed.msg = "✓ Lista guardada. Los datos se están actualizando (puede tardar unos minutos); esta pantalla se refrescará sola.";
+    seguirActualizacion(new Set(ed.borrador.map(e => e.ticker)));
+  } catch (e) { ed.msg = e.message === "Failed to fetch" ? "No se pudo conectar con GitHub." : e.message; }
+  ed.ocupado = false; pintarEditor();
+}
+
+// Comprueba cada 15 s si los datos ya reflejan la nueva lista
+function seguirActualizacion(deseados) {
+  clearInterval(sondeo);
+  const t0 = Date.now();
+  sondeo = setInterval(async () => {
+    try {
+      const r = await fetch("data/ultimo.json?" + Date.now(), {cache: "no-store"});
+      const sec = (await r.json()).secciones.find(s => s.nombre === "Empresas");
+      const hay = new Set(sec ? sec.items.map(i => i.simbolo) : []);
+      if ([...deseados].every(t => hay.has(t)) && [...hay].every(t => deseados.has(t))) {
+        clearInterval(sondeo);
+        await cargar();
+        ed.msg = "✓ Datos actualizados."; pintarEditor();
+        return;
+      }
+    } catch (e) {}
+    if (Date.now() - t0 > 6 * 60000) {
+      clearInterval(sondeo);
+      ed.msg = "Aún no se ven todos los cambios. Si falta alguna empresa, comprueba que su ticker exista en Yahoo Finance.";
+      pintarEditor();
+    }
+  }, 15000);
+}
+
+function pintarEditor() {
+  const c = document.getElementById("edCuerpo");
+  const msg = ed.msg ? '<div class="msgEd">' + esc(ed.msg) + "</div>" : "";
+  if (!ls.get("token")) {
+    c.innerHTML = '<p class="msgEd">Para editar la lista desde aquí hace falta un <b>token</b> de GitHub. Se crea una sola vez y se guarda solo en este dispositivo.</p>' +
+      '<ol class="pasos"><li>Abre <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>.</li>' +
+      "<li>Nombre: <i>App índices</i>. Caducidad: la más larga. En <i>Repository access</i> elige <i>Only select repositories</i> y marca tu repositorio.</li>" +
+      "<li>En <i>Permissions → Repository permissions</i> pon <i>Contents</i> en <i>Read and write</i>.</li>" +
+      "<li>Pulsa <i>Generate token</i>, copia el código (empieza por github_pat_) y pégalo aquí.</li></ol>" + msg +
+      '<input id="edToken" type="password" autocomplete="off" placeholder="Pega aquí el token">' +
+      (repoActual() ? "" : '<input id="edRepo" placeholder="usuario/repositorio">') +
+      '<button class="btn" id="edGuardarToken">Guardar token</button>';
+    document.getElementById("edGuardarToken").onclick = async () => {
+      const t = document.getElementById("edToken").value.trim();
+      const rp = document.getElementById("edRepo") ? document.getElementById("edRepo").value.trim() : "";
+      if (!t) { ed.msg = "Pega el token."; pintarEditor(); return; }
+      ls.set("token", t); if (rp) ls.set("repo", rp);
+      await cargarBorrador();
+    };
+    return;
+  }
+  const actuales = new Set(tickersActuales());
+  const filasEd = ed.borrador.map((e, i) => '<div class="edfila"><div class="i"><b>' + esc(e.nombre) + "</b><small>" + esc(e.ticker) +
+    " · " + esc(e.grupo || "Otras") + (actuales.has(e.ticker) ? "" : " · sin datos todavía") + '</small></div><button data-i="' + i + '" aria-label="Eliminar">🗑</button></div>').join("");
+  const grupos = [...new Set(ed.borrador.map(e => e.grupo || "Otras"))];
+  c.innerHTML = msg + (ed.cargado ? (filasEd || '<p class="msgEd">La lista está vacía.</p>') : "") +
+    '<div class="grupo">Añadir empresa</div>' +
+    '<input id="edTicker" placeholder="Ticker de Yahoo Finance (p. ej. IBE.MC, AAPL)" autocapitalize="characters">' +
+    '<input id="edNombre" placeholder="Nombre (p. ej. Iberdrola)">' +
+    '<input id="edGrupo" list="edGrupos" placeholder="Grupo (p. ej. Utilities)">' +
+    '<datalist id="edGrupos">' + grupos.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>" +
+    '<button class="btn sec" id="edAnadir">Añadir a la lista</button>' +
+    '<button class="btn" id="edGuardar"' + (ed.cargado && !ed.ocupado ? "" : " disabled") + ">Guardar y actualizar datos</button>" +
+    '<button class="enlace" id="edQuitar">Quitar el token de este dispositivo</button>';
+  c.querySelectorAll("button[data-i]").forEach(b => { b.onclick = () => { ed.borrador.splice(Number(b.dataset.i), 1); pintarEditor(); }; });
+  document.getElementById("edAnadir").onclick = () => {
+    const t = document.getElementById("edTicker").value.trim().toUpperCase();
+    const n = document.getElementById("edNombre").value.trim() || t;
+    const g = document.getElementById("edGrupo").value.trim() || "Otras";
+    if (!t) ed.msg = "Escribe el ticker.";
+    else if (ed.borrador.some(e => e.ticker === t)) ed.msg = "Ese ticker ya está en la lista.";
+    else { ed.borrador.push({ticker: t, nombre: n, grupo: g}); ed.msg = ""; }
+    pintarEditor();
+  };
+  document.getElementById("edGuardar").onclick = guardarLista;
+  document.getElementById("edQuitar").onclick = () => { ls.set("token", ""); ed.borrador = []; ed.cargado = false; ed.msg = ""; pintarEditor(); };
+}
+
+const cerrarEditor = () => document.getElementById("editor").classList.add("hide");
+document.getElementById("edCerrar").onclick = cerrarEditor;
+document.getElementById("editor").onclick = e => { if (e.target.id === "editor") cerrarEditor(); };
 
 document.getElementById("todos").onclick = () => { comparar = !comparar; refrescar(); };
 cargar();

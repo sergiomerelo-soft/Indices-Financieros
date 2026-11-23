@@ -26,15 +26,32 @@ BURSATILES = {
     "^DJI": "Dow Jones",
     "^IBEX": "IBEX 35",
 }
-EMPRESAS = {  # código de Yahoo Finance: nombre
-    "SPCX": "SpaceX",
-    "ANT": "Anthropic",
-    "TEF.MC": "Telefónica",
-    "NTGY.MC": "Naturgy",
-    "CABK.MC": "CaixaBank",
-    "ENG.MC": "Enagás",
-    "RED.MC": "Redeia",
-}
+EMPRESAS_JSON = Path("empresas.json")  # se edita desde la app (botón "Editar lista")
+EMPRESAS_DEFECTO = [
+    {"ticker": "CABK.MC", "nombre": "CaixaBank", "grupo": "Bancos"},
+    {"ticker": "NTGY.MC", "nombre": "Naturgy", "grupo": "Utilities"},
+    {"ticker": "ENG.MC", "nombre": "Enagás", "grupo": "Utilities"},
+    {"ticker": "RED.MC", "nombre": "Redeia", "grupo": "Utilities"},
+    {"ticker": "TEF.MC", "nombre": "Telefónica", "grupo": "Tecnológicas"},
+    {"ticker": "SPCX", "nombre": "SpaceX", "grupo": "Tecnológicas"},
+    {"ticker": "ANT", "nombre": "Anthropic", "grupo": "Tecnológicas"},
+]
+
+
+def leer_empresas():
+    try:
+        lista = json.loads(EMPRESAS_JSON.read_text(encoding="utf-8"))
+        lista = [e for e in lista if e.get("ticker")]
+    except Exception:
+        lista = EMPRESAS_DEFECTO
+    return lista
+
+
+LISTA_EMPRESAS = leer_empresas()
+EMPRESAS = {e["ticker"]: e.get("nombre") or e["ticker"] for e in LISTA_EMPRESAS}
+GRUPO_DE = {e["ticker"]: e.get("grupo") or "Otras" for e in LISTA_EMPRESAS}
+ORDEN_EMPRESAS = [t for g in dict.fromkeys(GRUPO_DE.values())
+                  for t in EMPRESAS if GRUPO_DE[t] == g]
 BONOS_YAHOO = {"^TNX": "Bono EE.UU. 10 años"}
 BONOS_BDE = {  # identificador propio: (código de serie en el Banco de España, nombre)
     "ES10Y": ("DPUG0B1F0ZP", "Bono España 10 años"),
@@ -60,7 +77,7 @@ SECCIONES = [
     ("Activos", [*ACTIVOS, *CAMBIO], False, True),
     ("Índices bursátiles", list(BURSATILES), False, False),
     ("Bonos y tipos", [*BONOS_YAHOO, "ES10Y", "FR10Y", "DE10Y", *EURIBOR_BCE], True, False),
-    ("Empresas", list(EMPRESAS), False, False),
+    ("Empresas", ORDEN_EMPRESAS, False, False),
 ]
 # --------------------------------------------------------------------------
 
@@ -165,6 +182,7 @@ def resumen(datos):
                 "moneda": MONEDA.get(s),
                 "convertible": s in CONVERTIBLES,
                 "decimales": 4 if s in CAMBIO else 2,
+                "grupo": GRUPO_DE.get(s, "Otras"),
             })
         secciones.append({"nombre": nombre_sec, "tasa": tasa,
                           "convertible": convertible, "items": items})
@@ -190,6 +208,8 @@ def main():
         if not p.empty:
             datos = p if datos.empty else p.combine_first(datos)
 
+    # Quita las columnas de empresas eliminadas de la lista
+    datos = datos[[c for c in datos.columns if c in NOMBRES]]
     datos = datos.sort_index().round(4)
     datos.to_csv(CSV)
     JSON.write_text(json.dumps(resumen(datos), ensure_ascii=False, indent=2),
