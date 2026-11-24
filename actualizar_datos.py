@@ -85,6 +85,7 @@ DATA = Path("data")
 DATA.mkdir(exist_ok=True)
 CSV = DATA / "historico.csv"
 JSON = DATA / "ultimo.json"
+AVISOS = DATA / "avisos.json"
 UA = {"User-Agent": "Mozilla/5.0"}
 
 
@@ -159,6 +160,27 @@ def intentar(nombre, funcion, *args):
         return pd.DataFrame()
 
 
+def sugerencias(nombre):
+    """Posibles tickers para un nombre de empresa (búsqueda de Yahoo Finance)."""
+    try:
+        res = yf.Search(nombre, max_results=8, news_count=0).quotes
+        return [{"symbol": q["symbol"],
+                 "nombre": q.get("shortname") or q.get("longname") or q["symbol"],
+                 "bolsa": q.get("exchDisp", "")}
+                for q in res if q.get("symbol") and q.get("quoteType") in ("EQUITY", "ETF")][:4]
+    except Exception:
+        return []
+
+
+def avisos(datos):
+    """Empresas de la lista de las que no se han podido obtener datos."""
+    sin = {}
+    for ticker, nombre in EMPRESAS.items():
+        if ticker not in datos or datos[ticker].dropna().shape[0] < 2:
+            sin[ticker] = {"nombre": nombre, "sugerencias": sugerencias(nombre)}
+    return sin
+
+
 def resumen(datos):
     secciones = []
     for nombre_sec, simbolos, tasa, convertible in SECCIONES:
@@ -214,6 +236,8 @@ def main():
     datos.to_csv(CSV)
     JSON.write_text(json.dumps(resumen(datos), ensure_ascii=False, indent=2),
                     encoding="utf-8")
+    AVISOS.write_text(json.dumps({"sin_datos": avisos(datos)}, ensure_ascii=False, indent=2),
+                      encoding="utf-8")
     print(f"Histórico actualizado: {len(datos)} días, {datos.shape[1]} indicadores.")
 
 

@@ -82,6 +82,7 @@ html,body{overscroll-behavior-y:contain}
 .edfila small{display:block;color:var(--muted);font-size:11px}
 .edfila button{border:0;background:none;font-size:18px;cursor:pointer}
 .msgEd{font-size:13px;margin:8px 0;color:var(--muted);line-height:1.5}
+.aviso{background:color-mix(in srgb,var(--down) 12%,transparent);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.4;margin-bottom:10px}
 .hoja input,.hoja select{font-size:16px}
 .hoja select{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);font:inherit;font-size:16px;margin:4px 0 8px}
 .res{display:block;width:100%;text-align:left;background:var(--card);border:0;border-radius:12px;padding:10px 12px;margin-bottom:6px;color:inherit;font:inherit;cursor:pointer}
@@ -124,7 +125,7 @@ const COLORES = ["#2563eb","#16a34a","#dc2626","#f59e0b","#9333ea","#0891b2","#d
 const RANGOS = {"1M":30,"6M":182,"1A":365,"5A":1825,"Máx":99999};
 let secciones = [], simbolos = [], filas = [];
 let iSec = 0, seleccion = null, rango = "1A", comparar = false, grafico = null;
-let moneda = "USD", filasEUR = [];
+let moneda = "USD", filasEUR = [], avisos = {};
 
 const fmt = (n, d = 2) => n.toLocaleString("es-ES", {maximumFractionDigits: d});
 const fechaCorta = f => f.slice(8, 10) + "/" + f.slice(5, 7);
@@ -199,6 +200,10 @@ async function cargar() {
     const fechas = secciones.flatMap(s => s.items.map(i => i.fecha)).sort();
     document.getElementById("sub").textContent =
       fechas.length ? "Datos hasta el " + fechas[fechas.length - 1] : "";
+    try {
+      const ra = await fetch("data/avisos.json?" + t, {cache: "no-store"});
+      avisos = ra.ok ? ((await ra.json()).sin_datos || {}) : {};
+    } catch (e) { avisos = {}; }
     prepararEUR();
     const kPrev = secciones.findIndex(s => s.nombre === previa);
     iSec = kPrev >= 0 ? kPrev : Math.max(0, secciones.findIndex(s => s.items.length));
@@ -310,6 +315,13 @@ function botonEditar() {
 
 function pintarLista(cont, items) {
   cont.appendChild(botonEditar());
+  const sinDatos = Object.keys(avisos).map(t => avisos[t].nombre || t);
+  if (sinDatos.length) {
+    const a = document.createElement("div");
+    a.className = "aviso";
+    a.textContent = "⚠ Sin datos: " + sinDatos.join(", ") + ". Toca «Editar lista» para corregir el ticker.";
+    cont.appendChild(a);
+  }
   const ms = {};
   items.forEach(u => { ms[u.simbolo] = metricas(u.simbolo); });
 
@@ -601,10 +613,14 @@ function seguirActualizacion(deseados) {
       const r = await fetch("data/ultimo.json?" + Date.now(), {cache: "no-store"});
       const sec = (await r.json()).secciones.find(s => s.nombre === "Empresas");
       const hay = new Set(sec ? sec.items.map(i => i.simbolo) : []);
-      if ([...deseados].every(t => hay.has(t)) && [...hay].every(t => deseados.has(t))) {
+      let sin = {};
+      try { const ra = await fetch("data/avisos.json?" + Date.now(), {cache: "no-store"}); if (ra.ok) sin = (await ra.json()).sin_datos || {}; } catch (e) {}
+      if ([...deseados].every(t => hay.has(t) || sin[t]) && [...hay].every(t => deseados.has(t))) {
         clearInterval(sondeo);
         await cargar();
-        ed.msg = "✓ Datos actualizados."; pintarEditor();
+        const malos = [...deseados].filter(t => sin[t] && !hay.has(t));
+        ed.msg = malos.length ? "Listo, pero no se encontraron datos de " + malos.join(", ") + ". Revisa el ticker." : "✓ Datos actualizados.";
+        pintarEditor();
         return;
       }
     } catch (e) {}
@@ -646,19 +662,55 @@ async function buscarEmpresas(q) {
   }
   return null;  // no se pudo consultar
 }
+// Directorio incluido en la app: la búsqueda funciona aunque el buscador en línea falle
+const DIRECTORIO = [];
+const dir = (bolsa, texto) => texto.split(";").forEach(p => {
+  const k = p.lastIndexOf("=");
+  DIRECTORIO.push({nombre: p.slice(0, k).trim(), simbolo: p.slice(k + 1).trim(), bolsa});
+});
+dir("Madrid", "Acciona=ANA.MC; Acciona Energía=ANE.MC; Acerinox=ACX.MC; ACS=ACS.MC; Aena=AENA.MC; Almirall=ALM.MC; Amadeus=AMS.MC; ArcelorMittal=MTS.MC; Arteche=ART.MC; Banco Sabadell=SAB.MC; Banco Santander=SAN.MC; Bankinter=BKT.MC; BBVA=BBVA.MC; CaixaBank=CABK.MC; Cellnex=CLNX.MC; Colonial=COL.MC; Corporación Financiera Alba=ALB.MC; Ebro Foods=EBRO.MC; Enagás=ENG.MC; Endesa=ELE.MC; Ferrovial=FER.MC; Fluidra=FDR.MC; Gestamp=GEST.MC; Grifols=GRF.MC; IAG=IAG.MC; Iberdrola=IBE.MC; Indra=IDR.MC; Inditex=ITX.MC; Logista=LOG.MC; Mapfre=MAP.MC; Meliá Hotels=MEL.MC; Merlin Properties=MRL.MC; Naturgy=NTGY.MC; Opdenergy=OPDE.MC; Redeia=RED.MC; Repsol=REP.MC; Rovi=ROVI.MC; Sacyr=SCYR.MC; Solaria=SLR.MC; Soltec=SOL.MC; Técnicas Reunidas=TRE.MC; Telefónica=TEF.MC; Unicaja=UNI.MC; Viscofan=VIS.MC");
+dir("Lisboa", "EDP=EDP.LS; EDP Renováveis=EDPR.LS; Galp=GALP.LS; REN=RENE.LS; Jerónimo Martins=JMT.LS");
+dir("Milán", "Enel=ENEL.MI; Terna=TRN.MI; Snam=SRG.MI; Italgas=IG.MI; A2A=A2A.MI; Eni=ENI.MI; Intesa Sanpaolo=ISP.MI; UniCredit=UCG.MI; Generali=G.MI; Prysmian=PRY.MI; Leonardo=LDO.MI; Ferrari=RACE.MI; Stellantis=STLAM.MI");
+dir("París", "TotalEnergies=TTE.PA; Schneider Electric=SU.PA; Engie=ENGI.PA; Legrand=LR.PA; Nexans=NEX.PA; Veolia=VIE.PA; Bureau Veritas=BVI.PA; Air Liquide=AI.PA; Airbus=AIR.PA; AXA=CS.PA; BNP Paribas=BNP.PA; LVMH=MC.PA; L'Oréal=OR.PA; Sanofi=SAN.PA; Vinci=DG.PA; Orange=ORA.PA; Safran=SAF.PA; Capgemini=CAP.PA; Hermès=RMS.PA; Thales=HO.PA; Saint-Gobain=SGO.PA; Société Générale=GLE.PA; Renault=RNO.PA; Eurofins=ERF.PA");
+dir("Xetra (Alemania)", "Siemens=SIE.DE; Siemens Energy=ENR.DE; SAP=SAP.DE; Allianz=ALV.DE; BASF=BAS.DE; Bayer=BAYN.DE; BMW=BMW.DE; Mercedes-Benz=MBG.DE; Volkswagen=VOW3.DE; Deutsche Telekom=DTE.DE; Deutsche Bank=DBK.DE; E.ON=EOAN.DE; RWE=RWE.DE; Infineon=IFX.DE; Adidas=ADS.DE; Munich Re=MUV2.DE; Rheinmetall=RHM.DE; Nordex=NDX1.DE; SMA Solar=S92.DE; Siemens Healthineers=SHL.DE");
+dir("Londres", "National Grid=NG.L; SSE=SSE.L; Centrica=CNA.L; Intertek=ITRK.L; Shell=SHEL.L; BP=BP.L; HSBC=HSBA.L; AstraZeneca=AZN.L; Unilever=ULVR.L; Rolls-Royce=RR.L; BAE Systems=BA.L; Vodafone=VOD.L; Barclays=BARC.L; Lloyds=LLOY.L");
+dir("Suiza", "ABB=ABBN.SW; SGS=SGSN.SW; Nestlé=NESN.SW; Novartis=NOVN.SW; Roche=ROG.SW; UBS=UBSG.SW; Holcim=HOLN.SW; Zurich Insurance=ZURN.SW; Sika=SIKA.SW");
+dir("Países Bajos / Bélgica", "ASML=ASML.AS; Philips=PHIA.AS; ING=INGA.AS; Heineken=HEIA.AS; Prosus=PRX.AS; Adyen=ADYEN.AS; Signify=LIGHT.AS; Alfen=ALFEN.AS; Elia=ELI.BR");
+dir("Países nórdicos", "Vestas=VWS.CO; Ørsted=ORSTED.CO; NKT=NKT.CO; Novo Nordisk=NOVO-B.CO; Equinor=EQNR.OL; Nokia=NOKIA.HE; Neste=NESTE.HE; Fortum=FORTUM.HE; Ericsson=ERIC-B.ST; Atlas Copco=ATCO-A.ST");
+dir("EE. UU.", "Apple=AAPL; Microsoft=MSFT; Alphabet (Google)=GOOGL; Amazon=AMZN; Meta=META; Nvidia=NVDA; Tesla=TSLA; Netflix=NFLX; Oracle=ORCL; AMD=AMD; Intel=INTC; Broadcom=AVGO; Salesforce=CRM; Adobe=ADBE; IBM=IBM; Cisco=CSCO; Qualcomm=QCOM; Palantir=PLTR; SpaceX=SPCX; Anthropic=ANT; Berkshire Hathaway=BRK-B; JPMorgan=JPM; Bank of America=BAC; Citigroup=C; Goldman Sachs=GS; Morgan Stanley=MS; Visa=V; Mastercard=MA; PayPal=PYPL; Walmart=WMT; Costco=COST; Coca-Cola=KO; PepsiCo=PEP; McDonald's=MCD; Disney=DIS; Nike=NKE; Johnson & Johnson=JNJ; Pfizer=PFE; Eli Lilly=LLY; Merck=MRK; UnitedHealth=UNH; Exxon Mobil=XOM; Chevron=CVX; Boeing=BA; Lockheed Martin=LMT; GE Aerospace=GE; GE Vernova=GEV; Honeywell=HON; Caterpillar=CAT; NextEra Energy=NEE; Duke Energy=DUK; Southern Company=SO; Constellation Energy=CEG; Vistra=VST; Eaton=ETN; Emerson=EMR; Vertiv=VRT; Quanta Services=PWR; Hubbell=HUBB; Itron=ITRI; MYR Group=MYRG; UL Solutions=ULS; Enphase=ENPH; First Solar=FSLR; Plug Power=PLUG; Uber=UBER; Airbnb=ABNB; Spotify=SPOT; Shopify=SHOP; Snowflake=SNOW; CrowdStrike=CRWD; Coinbase=COIN");
+dir("Latinoamérica", "Petrobras=PBR; Vale=VALE; Itaú Unibanco=ITUB; Bradesco=BBD; MercadoLibre=MELI; América Móvil=AMX; FEMSA=FMX; Cemex=CX; Southern Copper=SCCO; Ecopetrol=EC; Credicorp=BAP; YPF=YPF; SQM=SQM; Enel Américas=ENIA; Enel Chile=ENIC; Pampa Energía=PAM; Grupo México=GMEXICOB.MX; Walmart de México=WALMEX.MX; Banco de Chile=BCH; LATAM Airlines=LTM");
+dir("Arabia Saudí", "Saudi Aramco=2222.SR; SABIC=2010.SR; Al Rajhi Bank=1120.SR; STC=7010.SR; ACWA Power=2082.SR; Saudi Electricity=5110.SR; Ma'aden=1211.SR");
+dir("Asia", "Samsung Electronics=005930.KS; TSMC=TSM; Toyota=TM; Sony=SONY; Hitachi=6501.T; Mitsubishi Electric=6503.T; Alibaba=BABA; Tencent=0700.HK; BYD=1211.HK; LS Electric=010120.KS; HD Hyundai Electric=267260.KS");
+
+const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function buscarLocal(q) {
+  const n = norm(q).trim(), t = q.trim().toUpperCase();
+  const puntos = d => {
+    const nom = norm(d.nombre);
+    if (nom.startsWith(n) || d.simbolo === t) return 3;
+    if (nom.split(/[\s,.()-]+/).some(w => w.startsWith(n))) return 2;
+    if (nom.includes(n) || d.simbolo.startsWith(t)) return 1;
+    return 0;
+  };
+  return DIRECTORIO.map(d => [puntos(d), d]).filter(x => x[0] > 0).sort((a, b) => b[0] - a[0]).slice(0, 8)
+    .map(x => ({symbol: x[1].simbolo, shortname: x[1].nombre, exchDisp: x[1].bolsa, quoteType: "EQUITY"}));
+}
+
 function alEscribir(valor) {
   ed.q = valor; clearTimeout(tBusca);
-  const q = valor.trim();
-  if (q.length < 2) { idBusca++; ed.buscando = false; ed.resultados = []; ed.sinBusqueda = false; pintarResultados(); return; }
+  const q = valor.trim(), id = ++idBusca;
+  if (q.length < 2) { ed.buscando = false; ed.resultados = []; ed.sinBusqueda = false; pintarResultados(); return; }
+  const local = buscarLocal(q);
+  ed.resultados = local; ed.sinBusqueda = false; ed.buscando = true; pintarResultados();
   tBusca = setTimeout(async () => {
-    const id = ++idBusca;
-    ed.buscando = true; pintarResultados();
     const r = await buscarEmpresas(q);
     if (id !== idBusca) return;
-    ed.buscando = false; ed.sinBusqueda = r === null; ed.resultados = r || [];
+    ed.buscando = false; ed.sinBusqueda = r === null;
+    if (r) { const vistos = new Set(local.map(x => x.symbol)); ed.resultados = local.concat(r.filter(x => !vistos.has(x.symbol))).slice(0, 10); }
     pintarResultados();
   }, 350);
 }
+
 function pintarResultados() {
   const c = document.getElementById("edResultados");
   if (!c) return;
@@ -666,21 +718,22 @@ function pintarResultados() {
   if (q.length < 2) { c.innerHTML = ""; return; }
   const ya = new Set(ed.borrador.map(e => e.ticker));
   const t = q.toUpperCase();
-  let html = "";
-  if (ed.buscando) html += '<div class="msgEd">Buscando…</div>';
-  else if (ed.sinBusqueda) html += '<div class="msgEd">No se pudo buscar ahora mismo. Si conoces el ticker, puedes usarlo directamente.</div>';
-  else if (!ed.resultados.length) html += '<div class="msgEd">Sin resultados para «' + esc(q) + '».</div>';
-  html += ed.resultados.map((x, i) => '<button class="res" data-i="' + i + '"' + (ya.has(x.symbol) ? " disabled" : "") + "><b>" +
+  let html = ed.resultados.map((x, i) => '<button class="res" data-r="' + i + '"' + (ya.has(x.symbol) ? " disabled" : "") + "><b>" +
     esc(limpiarNombre(x.shortname || x.longname || x.symbol)) + "</b><small>" + esc(x.symbol) + " · " + esc(x.exchDisp || "") +
     (ya.has(x.symbol) ? " · ya está en la lista" : "") + "</small></button>").join("");
-  if (!ed.buscando && (ed.sinBusqueda || !ed.resultados.length) && /^[A-Z0-9.\-^=]{1,15}$/.test(t) && !ya.has(t))
-    html += '<button class="res" data-t="1"><b>Usar «' + esc(t) + '» como ticker</b><small>Sin comprobar</small></button>';
+  if (!ed.resultados.length && !ed.buscando) {
+    html += '<div class="msgEd">' + (ed.sinBusqueda ? "No está en la lista incluida y no se pudo consultar el buscador en línea." : "Sin resultados para «" + esc(q) + "».") +
+      " Si conoces el ticker, escríbelo completo (p. ej. REP.MC).</div>";
+    if (!ya.has(t) && (/^[A-Z0-9^=-]{1,5}$/.test(t) || /^[A-Z0-9^=-]{1,8}\.[A-Z]{1,3}$/.test(t)))
+      html += '<button class="res" data-t="1"><b>Usar «' + esc(t) + '» como ticker</b><small>Sin comprobar</small></button>';
+  }
+  if (ed.buscando) html += '<div class="msgEd">Buscando más resultados…</div>';
   c.innerHTML = html;
   c.querySelectorAll("button.res").forEach(b => {
     b.onclick = () => {
       if (b.dataset.t) ed.sel = {ticker: t, nombre: t, bolsa: ""};
       else {
-        const x = ed.resultados[Number(b.dataset.i)];
+        const x = ed.resultados[Number(b.dataset.r)];
         ed.sel = {ticker: x.symbol, nombre: limpiarNombre(x.shortname || x.longname || x.symbol), bolsa: x.exchDisp || ""};
       }
       pintarEditor();
@@ -710,8 +763,15 @@ function pintarEditor() {
     return;
   }
   const actuales = new Set(tickersActuales());
-  const filasEd = ed.borrador.map((e, i) => '<div class="edfila"><div class="i"><b>' + esc(e.nombre) + "</b><small>" + esc(e.ticker) +
-    " · " + esc(e.grupo || "Otras") + (actuales.has(e.ticker) ? "" : " · sin datos todavía") + '</small></div><button data-i="' + i + '" aria-label="Eliminar">🗑</button></div>').join("");
+  const filasEd = ed.borrador.map((e, i) => {
+    const av = avisos[e.ticker], hay = actuales.has(e.ticker);
+    const estado = hay ? "" : (av ? " · ⚠ sin datos" : " · pendiente de actualizar");
+    const sug = (!hay && av && av.sugerencias ? av.sugerencias : []).filter(x => !ed.borrador.some(b => b.ticker === x.symbol))
+      .map(x => '<button class="res" data-fix="' + i + '" data-s="' + esc(x.symbol) + '"><b>¿Es «' + esc(limpiarNombre(x.nombre)) + '»?</b><small>Usar ' +
+        esc(x.symbol) + (x.bolsa ? " · " + esc(x.bolsa) : "") + "</small></button>").join("");
+    return '<div class="edfila"><div class="i"><b>' + esc(e.nombre) + "</b><small>" + esc(e.ticker) + " · " + esc(e.grupo || "Otras") + estado +
+      '</small></div><button data-i="' + i + '" aria-label="Eliminar">🗑</button></div>' + sug;
+  }).join("");
   let grupos = [...new Set(ed.borrador.map(e => e.grupo || "Otras"))];
   if (!grupos.length) grupos = ["Otras"];
   let anadir;
@@ -733,6 +793,13 @@ function pintarEditor() {
       const e = ed.borrador[Number(b.dataset.i)];
       if (!confirm("¿Quitar " + e.nombre + " de la lista?")) return;
       guardarLista(ed.borrador.filter((_, k) => k !== Number(b.dataset.i)), e.nombre + " eliminada.");
+    };
+  });
+  c.querySelectorAll("button[data-fix]").forEach(b => {
+    b.onclick = () => {
+      if (ed.ocupado) return;
+      const i = Number(b.dataset.fix);
+      guardarLista(ed.borrador.map((e, k) => k === i ? Object.assign({}, e, {ticker: b.dataset.s}) : e), "Ticker corregido.");
     };
   });
   if (ed.sel) {
