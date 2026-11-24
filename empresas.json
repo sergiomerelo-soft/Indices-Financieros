@@ -33,10 +33,5 @@
     "ticker": "ANT",
     "nombre": "Anthropic",
     "grupo": "Tecnológicas"
-  },
-  {
-    "ticker": "REPSOL",
-    "nombre": "REPSOL",
-    "grupo": "Utilities"
   }
 ]
