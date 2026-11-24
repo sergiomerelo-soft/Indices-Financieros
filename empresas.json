@@ -33,5 +33,10 @@
     "ticker": "ANT",
     "nombre": "Anthropic",
     "grupo": "Tecnológicas"
+  },
+  {
+    "ticker": "REP.MC",
+    "nombre": "Repsol",
+    "grupo": "Utilities"
   }
 ]
