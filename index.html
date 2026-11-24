@@ -82,6 +82,16 @@ html,body{overscroll-behavior-y:contain}
 .edfila small{display:block;color:var(--muted);font-size:11px}
 .edfila button{border:0;background:none;font-size:18px;cursor:pointer}
 .msgEd{font-size:13px;margin:8px 0;color:var(--muted);line-height:1.5}
+.hoja input,.hoja select{font-size:16px}
+.hoja select{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);font:inherit;font-size:16px;margin:4px 0 8px}
+.res{display:block;width:100%;text-align:left;background:var(--card);border:0;border-radius:12px;padding:10px 12px;margin-bottom:6px;color:inherit;font:inherit;cursor:pointer}
+.res b{display:block;font-size:14px}
+.res small{color:var(--muted);font-size:11px}
+.res:disabled{opacity:.5}
+.edsel{display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--accent);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.edsel .i{flex:1;min-width:0}
+.edsel small{display:block;color:var(--muted);font-size:11px}
+.edsel button{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer}
 .pasos{padding-left:20px;font-size:13px;color:var(--muted);line-height:1.5}
 .pasos a{color:var(--accent)}
 .hide{display:none}
@@ -534,7 +544,7 @@ const cabeceras = () => ({"Authorization": "Bearer " + ls.get("token"), "Accept"
 const seccionEmpresas = () => secciones.find(s => s.nombre === "Empresas") || {items: []};
 const tickersActuales = () => seccionEmpresas().items.map(i => i.simbolo);
 const listaActual = () => seccionEmpresas().items.map(i => ({ticker: i.simbolo, nombre: i.nombre, grupo: i.grupo || "Otras"}));
-let ed = {borrador: [], sha: null, msg: "", ocupado: false, cargado: false}, sondeo = null;
+let ed = {borrador: [], sha: null, msg: "", ocupado: false, cargado: false, q: "", sel: null, resultados: [], buscando: false, sinBusqueda: false}, sondeo = null;
 
 function errorGitHub(status) {
   if (status === 401) return "El token no es válido o ha caducado.";
@@ -545,7 +555,7 @@ function errorGitHub(status) {
 
 async function abrirEditor() {
   document.getElementById("editor").classList.remove("hide");
-  ed.msg = ""; ed.cargado = false;
+  ed.msg = ""; ed.cargado = false; ed.sel = null; ed.q = ""; ed.resultados = [];
   if (!ls.get("token")) { pintarEditor(); return; }
   await cargarBorrador();
 }
@@ -563,17 +573,22 @@ async function cargarBorrador() {
   ed.ocupado = false; pintarEditor();
 }
 
-async function guardarLista() {
+async function guardarLista(nueva, texto) {
+  const previa = ed.borrador;
   ed.ocupado = true; ed.msg = "Guardando…"; pintarEditor();
   try {
-    const body = {message: "Actualizar lista de empresas", content: aB64(JSON.stringify(ed.borrador, null, 2) + "\n")};
+    const body = {message: "Actualizar lista de empresas", content: aB64(JSON.stringify(nueva, null, 2) + "\n")};
     if (ed.sha) body.sha = ed.sha;
     const r = await fetch(apiUrl(), {method: "PUT", headers: Object.assign({"Content-Type": "application/json"}, cabeceras()), body: JSON.stringify(body)});
     if (!r.ok) throw new Error(errorGitHub(r.status));
     ed.sha = (await r.json()).content.sha;
-    ed.msg = "✓ Lista guardada. Los datos se están actualizando (puede tardar unos minutos); esta pantalla se refrescará sola.";
-    seguirActualizacion(new Set(ed.borrador.map(e => e.ticker)));
-  } catch (e) { ed.msg = e.message === "Failed to fetch" ? "No se pudo conectar con GitHub." : e.message; }
+    ed.borrador = nueva;
+    ed.msg = "✓ " + texto + " Los datos se están actualizando (puede tardar unos minutos); esta pantalla se refrescará sola.";
+    seguirActualizacion(new Set(nueva.map(e => e.ticker)));
+  } catch (e) {
+    ed.borrador = previa;
+    ed.msg = e.message === "Failed to fetch" ? "No se pudo conectar con GitHub." : e.message;
+  }
   ed.ocupado = false; pintarEditor();
 }
 
@@ -601,6 +616,78 @@ function seguirActualizacion(deseados) {
   }, 15000);
 }
 
+// ----- Búsqueda de empresas por nombre o ticker (Yahoo Finance) -----
+const limpiarNombre = n => {
+  let t = String(n || "").replace(/,?\s+(S\.?A\.?U?|Inc\.?|Corp(oration)?\.?|Ltd\.?|PLC|N\.?V\.?|AG|SE|Co\.?)$/i, "").trim();
+  if (t.length > 5 && t === t.toUpperCase() && !/\d/.test(t)) t = t.charAt(0) + t.slice(1).toLowerCase();
+  return t;
+};
+async function pedir(url, ms) {
+  const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
+  try {
+    const r = await fetch(url, {signal: c.signal});
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+let rutaBusqueda = 0, tBusca = null, idBusca = 0;
+async function buscarEmpresas(q) {
+  const base = "https://query2.finance.yahoo.com/v1/finance/search?quotesCount=10&newsCount=0&listsCount=0&q=" + encodeURIComponent(q);
+  const rutas = [u => u, u => "https://corsproxy.io/?url=" + encodeURIComponent(u), u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u)];
+  for (let k = 0; k < rutas.length; k++) {
+    const i = (rutaBusqueda + k) % rutas.length;
+    try {
+      const j = await pedir(rutas[i](base), 6000);
+      if (j && Array.isArray(j.quotes)) {
+        rutaBusqueda = i;
+        return j.quotes.filter(x => x.symbol && ["EQUITY", "ETF"].includes(x.quoteType)).slice(0, 8);
+      }
+    } catch (e) {}
+  }
+  return null;  // no se pudo consultar
+}
+function alEscribir(valor) {
+  ed.q = valor; clearTimeout(tBusca);
+  const q = valor.trim();
+  if (q.length < 2) { idBusca++; ed.buscando = false; ed.resultados = []; ed.sinBusqueda = false; pintarResultados(); return; }
+  tBusca = setTimeout(async () => {
+    const id = ++idBusca;
+    ed.buscando = true; pintarResultados();
+    const r = await buscarEmpresas(q);
+    if (id !== idBusca) return;
+    ed.buscando = false; ed.sinBusqueda = r === null; ed.resultados = r || [];
+    pintarResultados();
+  }, 350);
+}
+function pintarResultados() {
+  const c = document.getElementById("edResultados");
+  if (!c) return;
+  const q = ed.q.trim();
+  if (q.length < 2) { c.innerHTML = ""; return; }
+  const ya = new Set(ed.borrador.map(e => e.ticker));
+  const t = q.toUpperCase();
+  let html = "";
+  if (ed.buscando) html += '<div class="msgEd">Buscando…</div>';
+  else if (ed.sinBusqueda) html += '<div class="msgEd">No se pudo buscar ahora mismo. Si conoces el ticker, puedes usarlo directamente.</div>';
+  else if (!ed.resultados.length) html += '<div class="msgEd">Sin resultados para «' + esc(q) + '».</div>';
+  html += ed.resultados.map((x, i) => '<button class="res" data-i="' + i + '"' + (ya.has(x.symbol) ? " disabled" : "") + "><b>" +
+    esc(limpiarNombre(x.shortname || x.longname || x.symbol)) + "</b><small>" + esc(x.symbol) + " · " + esc(x.exchDisp || "") +
+    (ya.has(x.symbol) ? " · ya está en la lista" : "") + "</small></button>").join("");
+  if (!ed.buscando && (ed.sinBusqueda || !ed.resultados.length) && /^[A-Z0-9.\-^=]{1,15}$/.test(t) && !ya.has(t))
+    html += '<button class="res" data-t="1"><b>Usar «' + esc(t) + '» como ticker</b><small>Sin comprobar</small></button>';
+  c.innerHTML = html;
+  c.querySelectorAll("button.res").forEach(b => {
+    b.onclick = () => {
+      if (b.dataset.t) ed.sel = {ticker: t, nombre: t, bolsa: ""};
+      else {
+        const x = ed.resultados[Number(b.dataset.i)];
+        ed.sel = {ticker: x.symbol, nombre: limpiarNombre(x.shortname || x.longname || x.symbol), bolsa: x.exchDisp || ""};
+      }
+      pintarEditor();
+    };
+  });
+}
+
 function pintarEditor() {
   const c = document.getElementById("edCuerpo");
   const msg = ed.msg ? '<div class="msgEd">' + esc(ed.msg) + "</div>" : "";
@@ -625,27 +712,47 @@ function pintarEditor() {
   const actuales = new Set(tickersActuales());
   const filasEd = ed.borrador.map((e, i) => '<div class="edfila"><div class="i"><b>' + esc(e.nombre) + "</b><small>" + esc(e.ticker) +
     " · " + esc(e.grupo || "Otras") + (actuales.has(e.ticker) ? "" : " · sin datos todavía") + '</small></div><button data-i="' + i + '" aria-label="Eliminar">🗑</button></div>').join("");
-  const grupos = [...new Set(ed.borrador.map(e => e.grupo || "Otras"))];
+  let grupos = [...new Set(ed.borrador.map(e => e.grupo || "Otras"))];
+  if (!grupos.length) grupos = ["Otras"];
+  let anadir;
+  if (ed.sel) {
+    anadir = '<div class="edsel"><div class="i"><b>' + esc(ed.sel.nombre) + "</b><small>" + esc(ed.sel.ticker) + (ed.sel.bolsa ? " · " + esc(ed.sel.bolsa) : "") +
+      '</small></div><button id="edCambiar" aria-label="Cambiar">✕</button></div>' +
+      '<select id="edGrupoSel">' + grupos.map(g => '<option value="' + esc(g) + '">' + esc(g) + "</option>").join("") + '<option value="__nuevo">➕ Nuevo grupo…</option></select>' +
+      '<input id="edGrupoNuevo" class="hide" placeholder="Nombre del nuevo grupo">' +
+      '<button class="btn" id="edAnadir"' + (ed.cargado && !ed.ocupado ? "" : " disabled") + ">Añadir y actualizar datos</button>";
+  } else {
+    anadir = '<input id="edBuscar" placeholder="Nombre de la empresa o ticker (p. ej. Iberdrola, AAPL)" autocomplete="off" value="' + esc(ed.q) + '"><div id="edResultados"></div>';
+  }
   c.innerHTML = msg + (ed.cargado ? (filasEd || '<p class="msgEd">La lista está vacía.</p>') : "") +
-    '<div class="grupo">Añadir empresa</div>' +
-    '<input id="edTicker" placeholder="Ticker de Yahoo Finance (p. ej. IBE.MC, AAPL)" autocapitalize="characters">' +
-    '<input id="edNombre" placeholder="Nombre (p. ej. Iberdrola)">' +
-    '<input id="edGrupo" list="edGrupos" placeholder="Grupo (p. ej. Utilities)">' +
-    '<datalist id="edGrupos">' + grupos.map(g => '<option value="' + esc(g) + '">').join("") + "</datalist>" +
-    '<button class="btn sec" id="edAnadir">Añadir a la lista</button>' +
-    '<button class="btn" id="edGuardar"' + (ed.cargado && !ed.ocupado ? "" : " disabled") + ">Guardar y actualizar datos</button>" +
+    '<div class="grupo">Añadir empresa</div>' + (ed.cargado ? anadir : "") +
     '<button class="enlace" id="edQuitar">Quitar el token de este dispositivo</button>';
-  c.querySelectorAll("button[data-i]").forEach(b => { b.onclick = () => { ed.borrador.splice(Number(b.dataset.i), 1); pintarEditor(); }; });
-  document.getElementById("edAnadir").onclick = () => {
-    const t = document.getElementById("edTicker").value.trim().toUpperCase();
-    const n = document.getElementById("edNombre").value.trim() || t;
-    const g = document.getElementById("edGrupo").value.trim() || "Otras";
-    if (!t) ed.msg = "Escribe el ticker.";
-    else if (ed.borrador.some(e => e.ticker === t)) ed.msg = "Ese ticker ya está en la lista.";
-    else { ed.borrador.push({ticker: t, nombre: n, grupo: g}); ed.msg = ""; }
-    pintarEditor();
-  };
-  document.getElementById("edGuardar").onclick = guardarLista;
+  c.querySelectorAll("button[data-i]").forEach(b => {
+    b.onclick = () => {
+      if (ed.ocupado) return;
+      const e = ed.borrador[Number(b.dataset.i)];
+      if (!confirm("¿Quitar " + e.nombre + " de la lista?")) return;
+      guardarLista(ed.borrador.filter((_, k) => k !== Number(b.dataset.i)), e.nombre + " eliminada.");
+    };
+  });
+  if (ed.sel) {
+    const sel = document.getElementById("edGrupoSel"), nuevo = document.getElementById("edGrupoNuevo");
+    sel.onchange = () => nuevo.classList.toggle("hide", sel.value !== "__nuevo");
+    document.getElementById("edCambiar").onclick = () => { ed.sel = null; pintarEditor(); };
+    document.getElementById("edAnadir").onclick = () => {
+      const g = sel.value === "__nuevo" ? nuevo.value.trim() : sel.value;
+      if (!g) { ed.msg = "Escribe el nombre del grupo."; pintarEditor(); return; }
+      if (ed.borrador.some(e => e.ticker === ed.sel.ticker)) { ed.msg = "Ese ticker ya está en la lista."; ed.sel = null; pintarEditor(); return; }
+      const nueva = ed.borrador.concat([{ticker: ed.sel.ticker, nombre: ed.sel.nombre, grupo: g}]);
+      const nombre = ed.sel.nombre;
+      ed.sel = null; ed.q = ""; ed.resultados = []; ed.sinBusqueda = false;
+      guardarLista(nueva, nombre + " añadida.");
+    };
+  } else if (ed.cargado) {
+    const caja = document.getElementById("edBuscar");
+    caja.oninput = () => alEscribir(caja.value);
+    pintarResultados();
+  }
   document.getElementById("edQuitar").onclick = () => { ls.set("token", ""); ed.borrador = []; ed.cargado = false; ed.msg = ""; pintarEditor(); };
 }
 
