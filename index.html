@@ -43,7 +43,6 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:8px 0 2px}
 .monedas{margin-bottom:14px}
 .bar button,.monedas button{flex:1;min-width:0;padding:8px 6px;border:0;background:none;color:var(--muted);border-radius:10px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .2s,color .2s}
 .bar button.on,.monedas button.on{background:var(--accent);color:#fff}
-.lectura{background:var(--card);border-radius:14px;padding:11px 14px;margin-bottom:10px;font-size:14px;font-weight:600;min-height:42px;line-height:1.4;box-shadow:var(--sombra)}
 .chart{background:var(--card);border-radius:18px;padding:12px;height:340px;position:relative;box-shadow:var(--sombra)}
 .chart canvas{touch-action:pan-y}
 .pista{color:var(--muted);font-size:12px;text-align:center;margin-top:10px}
@@ -127,7 +126,6 @@ html,body{overscroll-behavior-y:contain}
 <div class="grid" id="cards"></div>
 <div id="detalle">
   <div class="bar" id="rangos"></div>
-  <div class="lectura" id="lectura"></div>
   <div class="chart"><canvas id="grafico"></canvas></div>
   <div class="pista">Pasa el cursor o desliza el dedo por el gráfico para ver la fecha y el valor.</div>
   <button class="all" id="todos">Comparar todos los de esta sección</button>
@@ -142,7 +140,7 @@ html,body{overscroll-behavior-y:contain}
 
 <script>
 const COLORES = ["#2563eb","#16a34a","#dc2626","#f59e0b","#9333ea","#0891b2","#db2777","#65a30d"];
-const RANGOS = {"1M":30,"6M":182,"1A":365,"5A":1825,"Máx":99999};
+const RANGOS = {"1S":7,"1M":30,"6M":182,"1A":365,"2A":730,"5A":1825,"Máx":99999};
 let secciones = [], simbolos = [], filas = [];
 let iSec = 0, seleccion = null, rango = "1A", comparar = false, grafico = null;
 let moneda = "USD", filasEUR = [], avisos = {};
@@ -516,20 +514,6 @@ function pintarGrafico() {
     }];
   }
 
-  const lectura = document.getElementById("lectura");
-  const hayDato = (ds, k) => ds.data[k] !== null && ds.data[k] !== undefined;
-  const ultimoDato = () => {
-    for (let k = datos.length - 1; k >= 0; k--) if (datasets.some(ds => hayDato(ds, k))) return k;
-    return datos.length - 1;
-  };
-  const mostrar = (k, activo) => {
-    if (k < 0 || !datos[k]) { lectura.textContent = ""; return; }
-    const partes = datasets.filter(ds => hayDato(ds, k))
-      .map(ds => (comparar ? ds.label + " " : "") + fmt(ds.data[k], decimales) + unidad);
-    lectura.textContent = (activo ? "" : "Último dato · ") + fechaLarga(datos[k].f) + "  ·  " + partes.join("  ·  ");
-  };
-  mostrar(ultimoDato(), false);
-
   grafico = new Chart(document.getElementById("grafico"), {
     type: "line",
     data: {labels: etiquetas, datasets},
@@ -537,7 +521,6 @@ function pintarGrafico() {
     options: {
       responsive: true, maintainAspectRatio: false, animation: {duration: 600, easing: "easeOutCubic"},
       interaction: {mode: "index", intersect: false},
-      onHover: (ev, els) => mostrar(els.length ? els[0].index : ultimoDato(), els.length > 0),
       plugins: {
         cruz: {color: colTexto},
         legend: {display: comparar, labels: {color: colTexto, boxWidth: 12}},
