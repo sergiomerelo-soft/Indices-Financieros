@@ -3,7 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#f4f5f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Índices">
 <title>Índices financieros</title>
@@ -82,6 +88,20 @@ html,body{overscroll-behavior-y:contain}
 .edfila small{display:block;color:var(--muted);font-size:11px}
 .edfila button{border:0;background:none;font-size:18px;cursor:pointer}
 .msgEd{font-size:13px;margin:8px 0;color:var(--muted);line-height:1.5}
+.hoy{display:block}
+.resumen{background:var(--card);border-radius:18px;padding:16px;box-shadow:var(--sombra);margin-bottom:14px}
+.resumen .num2{display:flex;justify-content:space-between;align-items:flex-end}
+.resumen .grande{font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.resumen small{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+.barra{height:8px;border-radius:999px;background:var(--down);overflow:hidden;margin-top:14px}
+.barra span{display:block;height:100%;background:var(--up);border-radius:999px 0 0 999px}
+.mov{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;background:var(--card);border:0;border-radius:14px;padding:11px 14px;margin-bottom:8px;box-shadow:var(--sombra);color:inherit;font:inherit;text-align:left;cursor:pointer;animation:aparece .4s ease both}
+.mov b{display:block;font-size:14px}
+.mov small{color:var(--muted);font-size:11px}
+.mov .c{font-size:13px;font-weight:700;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,currentColor 14%,transparent);white-space:nowrap}
+.instalar{background:var(--accent);color:#fff;border-radius:16px;padding:14px;margin-bottom:14px;font-size:14px;line-height:1.4}
+.instalar button{margin:8px 8px 0 0;border:0;background:#fff;color:var(--accent);font:inherit;font-weight:700;padding:9px 14px;border-radius:10px;cursor:pointer}
+.instalar button.sec{background:none;color:#fff;font-weight:500;text-decoration:underline;padding-left:0}
 .aviso{background:color-mix(in srgb,var(--down) 12%,transparent);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.4;margin-bottom:10px}
 .hoja input,.hoja select{font-size:16px}
 .hoja select{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);font:inherit;font-size:16px;margin:4px 0 8px}
@@ -181,16 +201,17 @@ function itemsVista() {
   }).filter(Boolean);
 }
 
-async function cargar() {
+async function cargar(forzar) {
   try {
-    const t = Date.now();
+    const t = Date.now(), op = {cache: forzar ? "reload" : "no-store"};
     const [r1, r2] = await Promise.all([
-      fetch("data/ultimo.json?" + t),
-      fetch("data/historico.csv?" + t)
+      fetch("data/ultimo.json?" + t, op),
+      fetch("data/historico.csv?" + t, op)
     ]);
     if (!r1.ok || !r2.ok) throw new Error("No se encuentran los datos");
     const previa = secciones[iSec] && secciones[iSec].nombre;
     secciones = (await r1.json()).secciones;
+    secciones.unshift({nombre: "Hoy", hoy: true, items: [], tasa: false, convertible: false});
     const lineas = (await r2.text()).trim().split("\n");
     simbolos = lineas[0].split(",").slice(1);
     filas = lineas.slice(1).map(l => {
@@ -199,14 +220,14 @@ async function cargar() {
     });
     const fechas = secciones.flatMap(s => s.items.map(i => i.fecha)).sort();
     document.getElementById("sub").textContent =
-      fechas.length ? "Datos hasta el " + fechas[fechas.length - 1] : "";
+      (fechas.length ? "Datos hasta el " + fechas[fechas.length - 1] : "") + (navigator.onLine ? "" : " · sin conexión");
     try {
-      const ra = await fetch("data/avisos.json?" + t, {cache: "no-store"});
+      const ra = await fetch("data/avisos.json?" + t, op);
       avisos = ra.ok ? ((await ra.json()).sin_datos || {}) : {};
     } catch (e) { avisos = {}; }
     prepararEUR();
     const kPrev = secciones.findIndex(s => s.nombre === previa);
-    iSec = kPrev >= 0 ? kPrev : Math.max(0, secciones.findIndex(s => s.items.length));
+    iSec = kPrev >= 0 ? kPrev : 0;
     elegirPorDefecto();
     refrescar();
     return true;
@@ -226,6 +247,7 @@ function elegirPorDefecto() {
 }
 
 const ICONOS = {
+  "Hoy": ['<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', "Hoy"],
   "Activos": ['<path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20"/>', "Activos"],
   "Índices bursátiles": ['<polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/>', "Bolsa"],
   "Bonos y tipos": ['<path d="M3 21h18M5 21V10M9 21V10M15 21V10M19 21V10M2 10l10-6 10 6"/>', "Bonos"],
@@ -535,7 +557,77 @@ function pintarGrafico() {
   });
 }
 
-function refrescar() { pintarTabs(); pintarMonedas(); pintarTarjetas(); pintarRangos(); pintarGrafico(); }
+let instalar = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); instalar = e; if (secciones.length && seccion().hoy) refrescar(); });
+
+function pintarHoy() {
+  const cont = document.getElementById("cards"), det = document.getElementById("detalle");
+  cont.after(det); det.classList.add("hide");
+  cont.className = "hoy"; cont.innerHTML = "";
+  const todos = [];
+  secciones.forEach((s, k) => { if (!s.hoy) s.items.forEach(u => todos.push({u, k, s})); });
+  const precios = todos.filter(x => !x.u.tasa && x.u.simbolo !== "EURUSD=X");
+  if (!precios.length) { cont.innerHTML = '<div class="msg">Todavía no hay datos.</div>'; return; }
+  const sube = precios.filter(x => x.u.variacion > 0).length, baja = precios.filter(x => x.u.variacion < 0).length;
+  const r = document.createElement("div");
+  r.className = "resumen";
+  r.innerHTML = '<div class="num2"><div><div class="grande up">' + sube + "</div><small>suben</small></div>" +
+    '<div style="text-align:right"><div class="grande down">' + baja + "</div><small>bajan</small></div></div>" +
+    '<div class="barra"><span style="width:' + (sube / ((sube + baja) || 1) * 100) + '%"></span></div>';
+  cont.appendChild(r);
+
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (!standalone && (instalar || ios) && !ls.get("sinInstalar")) {
+    const i = document.createElement("div");
+    i.className = "instalar";
+    i.innerHTML = instalar ? "Instala la app para abrirla a pantalla completa y verla incluso sin conexión.<br><button id='inst'>Instalar</button><button class='sec' id='noInst'>Ahora no</button>"
+      : "Para instalarla: pulsa el botón Compartir y elige «Añadir a pantalla de inicio».<br><button class='sec' id='noInst'>Entendido</button>";
+    cont.appendChild(i);
+    if (instalar) document.getElementById("inst").onclick = async () => { instalar.prompt(); await instalar.userChoice; instalar = null; refrescar(); };
+    document.getElementById("noInst").onclick = () => { ls.set("sinInstalar", "1"); refrescar(); };
+  }
+
+  let n = 0;
+  const fila = x => {
+    const u = x.u, b = document.createElement("button"), cls = u.variacion >= 0 ? "up" : "down";
+    b.className = "mov"; b.style.animationDelay = (n++ * 40) + "ms";
+    b.innerHTML = "<span><b>" + esc(u.nombre) + "</b><small>" + esc(x.s.nombre) + " · " + fmt(u.valor, u.decimales || 2) + simboloDe(u) +
+      '</small></span><span class="c ' + cls + '">' + (u.variacion >= 0 ? "+" : "") + fmt(u.variacion, 2) + " %</span>";
+    b.onclick = () => { iSec = x.k; seleccion = u.simbolo; comparar = false; refrescar(); window.scrollTo(0, 0); };
+    return b;
+  };
+  const bloque = (titulo, lista) => {
+    if (!lista.length) return;
+    const t = document.createElement("div");
+    t.className = "grupo"; t.textContent = titulo;
+    cont.appendChild(t);
+    lista.forEach(x => cont.appendChild(fila(x)));
+  };
+  const orden = precios.slice().sort((a, b) => b.u.variacion - a.u.variacion);
+  bloque("Mayores subidas", orden.filter(x => x.u.variacion > 0).slice(0, 3));
+  bloque("Mayores bajadas", orden.filter(x => x.u.variacion < 0).slice(-3).reverse());
+
+  const t = document.createElement("div");
+  t.className = "grupo"; t.textContent = "Por sección";
+  cont.appendChild(t);
+  secciones.forEach((s, k) => {
+    if (s.hoy || !s.items.length) return;
+    const it = s.items.filter(u => !u.tasa && u.simbolo !== "EURUSD=X");
+    const b = document.createElement("button");
+    b.className = "mov";
+    b.innerHTML = "<span><b>" + esc(s.nombre) + "</b><small>" + s.items.length + " indicadores</small></span>" +
+      (it.length ? '<span><span class="up">▲ ' + it.filter(u => u.variacion > 0).length + '</span> &nbsp; <span class="down">▼ ' + it.filter(u => u.variacion < 0).length + "</span></span>" : "<span>›</span>");
+    b.onclick = () => { iSec = k; comparar = false; elegirPorDefecto(); refrescar(); window.scrollTo(0, 0); };
+    cont.appendChild(b);
+  });
+}
+
+function refrescar() {
+  pintarTabs(); pintarMonedas();
+  if (seccion().hoy) { pintarHoy(); return; }
+  pintarTarjetas(); pintarRangos(); pintarGrafico();
+}
 
 // ---------- Editor de la lista de empresas (guarda empresas.json en GitHub) ----------
 const ls = {
@@ -610,14 +702,14 @@ function seguirActualizacion(deseados) {
   const t0 = Date.now();
   sondeo = setInterval(async () => {
     try {
-      const r = await fetch("data/ultimo.json?" + Date.now(), {cache: "no-store"});
+      const r = await fetch("data/ultimo.json?" + Date.now(), {cache: "reload"});
       const sec = (await r.json()).secciones.find(s => s.nombre === "Empresas");
       const hay = new Set(sec ? sec.items.map(i => i.simbolo) : []);
       let sin = {};
-      try { const ra = await fetch("data/avisos.json?" + Date.now(), {cache: "no-store"}); if (ra.ok) sin = (await ra.json()).sin_datos || {}; } catch (e) {}
+      try { const ra = await fetch("data/avisos.json?" + Date.now(), {cache: "reload"}); if (ra.ok) sin = (await ra.json()).sin_datos || {}; } catch (e) {}
       if ([...deseados].every(t => hay.has(t) || sin[t]) && [...hay].every(t => deseados.has(t))) {
         clearInterval(sondeo);
-        await cargar();
+        await cargar(true);
         const malos = [...deseados].filter(t => sin[t] && !hay.has(t));
         ed.msg = malos.length ? "Listo, pero no se encontraron datos de " + malos.join(", ") + ". Revisa el ticker." : "✓ Datos actualizados.";
         pintarEditor();
@@ -844,7 +936,7 @@ async function actualizar() {
   cargando = true;
   ptr.style.transition = "transform .25s, opacity .25s";
   mostrarPtr("Actualizando…", 6);
-  const ok = await cargar();
+  const ok = await cargar(true);
   mostrarPtr(ok ? "✓ " + document.getElementById("sub").textContent : "No se pudo actualizar", 6);
   setTimeout(() => { ocultarPtr(); cargando = false; }, 1600);
 }
@@ -876,6 +968,10 @@ async function actualizar() {
 })();
 
 document.getElementById("todos").onclick = () => { comparar = !comparar; refrescar(); };
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+  navigator.serviceWorker.addEventListener("message", e => { if (e.data === "datos-nuevos" && !cargando) cargar(); });
+}
 cargar();
 </script>
 </body>
