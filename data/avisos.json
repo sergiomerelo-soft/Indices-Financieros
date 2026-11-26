@@ -1,3 +1,9 @@
 {
-  "sin_datos": {}
+  "sin_datos": {
+    "FR10Y": {
+      "nombre": "Bono Francia 10 años",
+      "seccion": "bonos",
+      "sugerencias": []
+    }
+  }
 }
