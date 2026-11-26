@@ -50,7 +50,7 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:8px 0 2px}
 .all.on{background:var(--accent);color:#fff}
 .msg{padding:24px;color:var(--muted);text-align:center;grid-column:1/-1}
 .lista{display:block}
-.cab,.fila{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1.1fr) repeat(3,minmax(0,.85fr));gap:4px;align-items:center}
+.cab,.fila{display:grid;grid-template-columns:minmax(0,2.5fr) repeat(4,minmax(0,1fr));gap:4px;align-items:center}
 .cab{padding:0 12px 6px;color:var(--muted);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.02em}
 .cab .ord{cursor:pointer}
 .cab .act{color:var(--accent)}
@@ -61,11 +61,16 @@ h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:8px 0 2px}
 .fila.sel{border-color:var(--accent)}
 .fila .nom b{display:block;font-size:14px}
 .fila .nom small{color:var(--muted);font-size:11px}
-.fila .num{text-align:right;font-size:12px;font-weight:700}
+.fila .num{text-align:right;font-size:11.5px;font-weight:700}
+.fila .nom{min-width:0}
+.fila .nom b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fila .pr{display:block;font-size:12px;font-weight:600;margin-top:2px}
+.fila .pr em{font-style:normal;font-size:11px;margin-left:3px}
+.cab .ord{cursor:pointer}
 .fila .num small{display:block;font-size:11px;font-weight:600}
 .nota{color:var(--muted);font-size:11px;margin:4px 2px 12px}
 #detalle{margin-bottom:12px}
-.edbar{display:flex;justify-content:flex-end;margin-bottom:8px}
+.edbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;grid-column:1/-1}
 .edbar button{border:0;background:var(--card);color:var(--accent);padding:8px 14px;border-radius:999px;font:inherit;font-size:13px;font-weight:600;box-shadow:var(--sombra);cursor:pointer}
 #editor{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
 #editor.hide{display:none}
@@ -87,6 +92,18 @@ html,body{overscroll-behavior-y:contain}
 .edfila small{display:block;color:var(--muted);font-size:11px}
 .edfila button{border:0;background:none;font-size:18px;cursor:pointer}
 .msgEd{font-size:13px;margin:8px 0;color:var(--muted);line-height:1.5}
+.sup{width:100%;margin-top:10px;padding:12px;border:0;border-radius:14px;background:var(--card);color:var(--text);font:inherit;font-size:14px;box-shadow:var(--sombra)}
+.zoomoff{position:absolute;top:8px;right:8px;z-index:2;border:0;border-radius:999px;background:var(--accent);color:#fff;font:inherit;font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer}
+.pests{display:flex;gap:6px;margin-bottom:10px}
+.pest{flex:1;padding:8px 4px;border:0;border-radius:10px;background:var(--card);color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.pest.on{background:var(--accent);color:#fff}
+.mv{display:flex;flex-direction:column;gap:2px}
+.edfila .mv button{border:0;background:none;color:var(--muted);font-size:12px;line-height:1;padding:3px 6px;cursor:pointer}
+.edfila .mv button:disabled,.ghead button:disabled{opacity:.25}
+.ghead{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:12px 2px 6px}
+.ghead button{border:0;background:none;color:var(--muted);font-size:13px;padding:2px 8px;cursor:pointer}
+.edpie{position:sticky;bottom:-8px;background:var(--bg);padding:10px 0 4px;margin-top:8px}
+.grid .aviso{grid-column:1/-1}
 .hoy{display:block}
 .resumen{background:var(--card);border-radius:18px;padding:16px;box-shadow:var(--sombra);margin-bottom:14px}
 .resumen .num2{display:flex;justify-content:space-between;align-items:flex-end}
@@ -126,8 +143,9 @@ html,body{overscroll-behavior-y:contain}
 <div class="grid" id="cards"></div>
 <div id="detalle">
   <div class="bar" id="rangos"></div>
-  <div class="chart"><canvas id="grafico"></canvas></div>
-  <div class="pista">Pasa el cursor o desliza el dedo por el gráfico para ver la fecha y el valor.</div>
+  <div class="chart"><canvas id="grafico"></canvas><button id="zoomOff" class="zoomoff hide">Restablecer zoom</button></div>
+  <select id="sup" class="sup hide"></select>
+  <div class="pista">Pasa el cursor o desliza el dedo por el gráfico para ver la fecha y el valor. Pellizca con dos dedos para ampliar.</div>
   <button class="all" id="todos">Comparar todos los de esta sección</button>
 </div>
 
@@ -148,7 +166,9 @@ let moneda = "USD", filasEUR = [], avisos = {};
 const fmt = (n, d = 2) => n.toLocaleString("es-ES", {maximumFractionDigits: d});
 const fechaCorta = f => f.slice(8, 10) + "/" + f.slice(5, 7);
 const fechaLarga = f => new Date(f + "T00:00:00").toLocaleDateString("es-ES", {day: "numeric", month: "short", year: "numeric"});
-const simboloDe = u => u.tasa ? " %" : (u.moneda === "USD" ? " $" : (u.moneda === "EUR" ? " €" : ""));
+const MONEDAS = {USD: " $", EUR: " €", GBp: " p", CHF: " CHF", DKK: " DKK", SEK: " SEK", NOK: " NOK", SAR: " SAR", KRW: " ₩", JPY: " ¥", HKD: " HK$", MXN: " MX$"};
+const simboloDe = u => u.tasa ? " %" : (u.moneda ? (MONEDAS[u.moneda] || " " + u.moneda) : "");
+const itemSup = sim => secciones.flatMap(s => s.items).find(x => x.simbolo === sim);
 
 // Línea vertical que acompaña al cursor o al dedo
 const cruz = {
@@ -164,7 +184,8 @@ const cruz = {
   }
 };
 const seccion = () => secciones[iSec] || {items: []};
-const esLista = () => seccion().nombre === "Empresas";
+let vista = "lista";
+const esLista = () => seccion().nombre === "Empresas" || (!seccion().hoy && vista === "lista");
 const enEuros = () => moneda === "EUR" && seccion().convertible;
 const baseFilas = () => enEuros() ? filasEUR : filas;
 
@@ -260,7 +281,7 @@ function pintarTabs() {
     const b = document.createElement("button");
     b.innerHTML = '<svg viewBox="0 0 24 24">' + svg + "</svg><span>" + texto + "</span>";
     b.className = k === iSec ? "on" : "";
-    b.onclick = () => { iSec = k; comparar = false; elegirPorDefecto(); refrescar(); window.scrollTo(0, 0); };
+    b.onclick = () => { iSec = k; comparar = false; orden = {col: null, dir: 1}; elegirPorDefecto(); refrescar(); window.scrollTo(0, 0); };
     cont.appendChild(b);
   });
 }
@@ -299,69 +320,86 @@ function pintarMonedas() {
 }
 
 const pct = (v, aprox, unidad) => (v === null || v === undefined) ? '<span class="num">—</span>' :
-  '<span class="num ' + (v >= 0 ? "up" : "down") + '">' + (v >= 0 ? "+" : "") + fmt(v, 1) + (unidad || "%") + (aprox ? "*" : "") + "</span>";
+  '<span class="num ' + (v >= 0 ? "up" : "down") + '">' + (v >= 0 ? "+" : "") + fmt(v, (unidad === "pb" || Math.abs(v) >= 100) ? 0 : 1) + (unidad || "%") + (aprox ? "*" : "") + "</span>";
 
-const serieDe = i => { const s = []; filas.forEach(r => { if (r.v[i] !== null) s.push({f: r.f, x: r.v[i]}); }); return s; };
+const serieDe = (i, base) => { const s = []; (base || filas).forEach(r => { if (r.v[i] !== null) s.push({f: r.f, x: r.v[i]}); }); return s; };
 const antes = (serie, f) => { let r = null; for (const p of serie) { if (p.f <= f) r = p; else break; } return r; };
+const menosDias = (f, d) => { const t = new Date(f + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() - d); return t.toISOString().slice(0, 10); };
 
-// YTD, 1 año y rendimiento relativo frente al IBEX 35 (mismo periodo que el YTD)
-function metricas(simbolo) {
-  const serie = serieDe(simbolos.indexOf(simbolo));
-  if (serie.length < 2) return {ytd: null, anio: null, rel: null};
+// Rendimientos a 1 semana, 1 mes, en el año (YTD) y a 1 año. En tipos de interés se miden en puntos básicos.
+// "rel" es la diferencia del YTD frente al IBEX 35 en el mismo periodo.
+function metricas(simbolo, tasa) {
+  const serie = serieDe(simbolos.indexOf(simbolo), baseFilas());
+  if (serie.length < 2) return {s1: null, m1: null, ytd: null, anio: null, rel: null};
   const ult = serie[serie.length - 1], anio = ult.f.slice(0, 4);
-  let base = antes(serie, (Number(anio) - 1) + "-12-31"), aprox = false;
-  if (!base) { base = serie.find(p => p.f.slice(0, 4) === anio); aprox = true; }
-  const ytd = base && base.f !== ult.f ? (ult.x / base.x - 1) * 100 : null;
-  const hace = antes(serie, (Number(anio) - 1) + ult.f.slice(4));
+  const ret = b => (b && b.f !== ult.f) ? (tasa ? (ult.x - b.x) * 100 : (ult.x / b.x - 1) * 100) : null;
+  let baseY = antes(serie, (Number(anio) - 1) + "-12-31"), aprox = false;
+  if (!baseY) { baseY = serie.find(p => p.f.slice(0, 4) === anio); aprox = true; }
+  const ytd = ret(baseY);
   let rel = null;
   const ib = simbolos.indexOf("^IBEX");
-  if (ytd !== null && ib >= 0) {
-    const si = serieDe(ib), b0 = antes(si, base.f), b1 = antes(si, ult.f);
+  if (!tasa && ytd !== null && ib >= 0) {
+    const si = serieDe(ib, filas), b0 = antes(si, baseY.f), b1 = antes(si, ult.f);
     if (b0 && b1 && b0.f !== b1.f) rel = ytd - (b1.x / b0.x - 1) * 100;
   }
-  return {ytd, ytdAprox: aprox && ytd !== null, anio: hace ? (ult.x / hace.x - 1) * 100 : null, rel};
+  return {s1: ret(antes(serie, menosDias(ult.f, 7))), m1: ret(antes(serie, menosDias(ult.f, 30))), ytd, ytdAprox: aprox && ytd !== null,
+    anio: ret(antes(serie, (Number(anio) - 1) + ult.f.slice(4))), rel};
 }
 
 let orden = {col: null, dir: 1};
-const COLS = [["nombre", "Empresa"], ["precio", "Precio"], ["ytd", "YTD"], ["anio", "1 año"], ["rel", "vs IBEX"]];
+const COLS = [["s1", "1S"], ["m1", "1M"], ["ytd", "YTD"], ["anio", "1A"]];
+
+function avisoSeccion(cont) {
+  const k = KEY_SEC[seccion().nombre];
+  const sin = Object.keys(avisos).filter(t => (avisos[t].seccion || "empresas") === k).map(t => avisos[t].nombre || t);
+  if (!sin.length) return;
+  const a = document.createElement("div");
+  a.className = "aviso";
+  a.textContent = "⚠ Sin datos: " + sin.join(", ") + ". Toca «Editar» para corregirlo.";
+  cont.appendChild(a);
+}
 
 function botonEditar() {
   const d = document.createElement("div");
   d.className = "edbar";
-  d.innerHTML = "<button>✎ Editar lista</button>";
-  d.firstChild.onclick = abrirEditor;
+  if (seccion().nombre !== "Empresas") {
+    const v = document.createElement("button");
+    v.textContent = vista === "lista" ? "▦ Tarjetas" : "☰ Lista";
+    v.onclick = () => {
+      vista = vista === "lista" ? "tarjetas" : "lista";
+      ls.set("vista", vista); comparar = false;
+      if (vista === "lista") seleccion = null; else elegirPorDefecto();
+      refrescar();
+    };
+    d.appendChild(v);
+  }
+  const b = document.createElement("button");
+  b.textContent = "✎ Editar";
+  b.onclick = abrirEditor;
+  d.appendChild(b);
   return d;
 }
 
 function pintarLista(cont, items) {
   cont.appendChild(botonEditar());
-  const sinDatos = Object.keys(avisos).map(t => avisos[t].nombre || t);
-  if (sinDatos.length) {
-    const a = document.createElement("div");
-    a.className = "aviso";
-    a.textContent = "⚠ Sin datos: " + sinDatos.join(", ") + ". Toca «Editar lista» para corregir el ticker.";
-    cont.appendChild(a);
-  }
+  avisoSeccion(cont);
+  const esEmp = seccion().nombre === "Empresas", tasa = !!seccion().tasa;
   const ms = {};
-  items.forEach(u => { ms[u.simbolo] = metricas(u.simbolo); });
+  items.forEach(u => { ms[u.simbolo] = metricas(u.simbolo, u.tasa); });
 
+  const rotulo = (c, texto) => '<span class="ord' + (orden.col === c ? " act" : "") + '" data-c="' + c + '">' + texto +
+    (orden.col === c ? (((c === "nombre") === (orden.dir === 1)) ? " ▲" : " ▼") : "") + "</span>";
   const cab = document.createElement("div");
   cab.className = "cab";
-  COLS.forEach(([c, texto]) => {
-    const sp = document.createElement("span");
-    const activo = orden.col === c;
-    const flecha = c === "nombre" ? (orden.dir === 1 ? " ▲" : " ▼") : (orden.dir === 1 ? " ▼" : " ▲");
-    sp.textContent = texto + (activo ? flecha : "");
-    if (c !== "precio") {
-      sp.className = "ord" + (activo ? " act" : "");
-      sp.onclick = () => {
-        if (orden.col !== c) orden = {col: c, dir: 1};
-        else if (orden.dir === 1) orden.dir = -1;
-        else orden = {col: null, dir: 1};
-        refrescar();
-      };
-    }
-    cab.appendChild(sp);
+  cab.innerHTML = "<span>" + rotulo("nombre", "Nombre") + (esEmp ? " · " + rotulo("rel", "vs IBEX") : "") + "</span>" + COLS.map(([c, t]) => rotulo(c, t)).join("");
+  cab.querySelectorAll("[data-c]").forEach(s => {
+    s.onclick = () => {
+      const c = s.dataset.c;
+      if (orden.col !== c) orden = {col: c, dir: 1};
+      else if (orden.dir === 1) orden.dir = -1;
+      else orden = {col: null, dir: 1};
+      refrescar();
+    };
   });
   cont.appendChild(cab);
 
@@ -377,33 +415,39 @@ function pintarLista(cont, items) {
     });
   };
 
-  const grupos = [];
-  items.forEach(u => { const g = u.grupo || "Otras"; if (!grupos.includes(g)) grupos.push(g); });
   let n = 0;
-  grupos.forEach(g => {
-    const t = document.createElement("div");
-    t.className = "grupo";
-    t.textContent = g;
-    cont.appendChild(t);
-    ordenar(items.filter(u => (u.grupo || "Otras") === g)).forEach(u => {
-      const m = ms[u.simbolo];
-      const fila = document.createElement("button");
-      fila.className = "fila" + (u.simbolo === seleccion ? " sel" : "");
-      fila.style.animationDelay = (n++ * 40) + "ms";
-      const cls = u.variacion >= 0 ? "up" : "down";
-      fila.innerHTML = '<span class="nom"><b>' + u.nombre + "</b><small>" + u.simbolo + "</small></span>" +
-        '<span class="num">' + fmt(u.valor, 2) + simboloDe(u) + '<small class="' + cls + '">' +
-        (u.variacion >= 0 ? "+" : "") + fmt(u.variacion, 2) + " %</small></span>" +
-        pct(m.ytd, m.ytdAprox) + pct(m.anio, false) + pct(m.rel, false, "pp");
-      fila.onclick = () => { seleccion = seleccion === u.simbolo ? null : u.simbolo; comparar = false; refrescar(); };
-      cont.appendChild(fila);
-      if (u.simbolo === seleccion) fila.after(document.getElementById("detalle"));
-    });
+  const pintarFilas = lista => ordenar(lista).forEach(u => {
+    const m = ms[u.simbolo], fila = document.createElement("button");
+    fila.className = "fila" + (u.simbolo === seleccion ? " sel" : "");
+    fila.style.animationDelay = (n++ * 40) + "ms";
+    const cls = u.variacion >= 0 ? "up" : "down";
+    fila.innerHTML = '<span class="nom"><b>' + esc(u.nombre) + "</b>" + (esEmp ? "<small>" + esc(u.simbolo) + "</small>" : "") +
+      '<span class="pr">' + fmt(u.valor, u.decimales || 2) + simboloDe(u) + '<em class="' + cls + '">' + (u.variacion >= 0 ? "+" : "") +
+      fmt(u.variacion, u.tasa ? 0 : 2) + (u.tasa ? "pb" : "%") + "</em></span>" +
+      ((esEmp && m.rel !== null) ? '<small class="' + (m.rel >= 0 ? "up" : "down") + '">vs IBEX ' + (m.rel >= 0 ? "+" : "") + fmt(m.rel, 1) + "pp</small>" : "") + "</span>" +
+      COLS.map(([c]) => pct(m[c], c === "ytd" && m.ytdAprox, tasa ? "pb" : "%")).join("");
+    fila.onclick = () => { seleccion = seleccion === u.simbolo ? null : u.simbolo; comparar = false; refrescar(); };
+    cont.appendChild(fila);
+    if (u.simbolo === seleccion) fila.after(document.getElementById("detalle"));
   });
+
+  if (esEmp) {
+    const grupos = [];
+    items.forEach(u => { const g = u.grupo || "Otras"; if (!grupos.includes(g)) grupos.push(g); });
+    grupos.forEach(g => {
+      const t = document.createElement("div");
+      t.className = "grupo";
+      t.textContent = g;
+      cont.appendChild(t);
+      pintarFilas(items.filter(u => (u.grupo || "Otras") === g));
+    });
+  } else pintarFilas(items);
 
   const nota = document.createElement("div");
   nota.className = "nota";
-  nota.textContent = "Toca una cabecera para ordenar. YTD: desde el último cierre del año anterior. vs IBEX: diferencia del YTD frente al IBEX 35, en puntos (pp). * Desde su salida a bolsa. — Sin histórico suficiente.";
+  nota.textContent = "Toca una cabecera para ordenar. 1S y 1M: últimos 7 y 30 días. YTD: desde el último cierre del año anterior." +
+    (tasa ? " En tipos de interés, las variaciones van en puntos básicos (pb)." : "") +
+    (esEmp ? " vs IBEX: diferencia del YTD frente al IBEX 35, en puntos (pp)." : "") + " * Desde su salida a bolsa. — Sin histórico suficiente.";
   cont.appendChild(nota);
 }
 
@@ -416,10 +460,12 @@ function pintarTarjetas() {
   if (!items.length) {
     cont.innerHTML = '<div class="msg">Todavía no hay datos en esta sección.' +
       (esLista() ? "<br>Añade empresas con el botón Editar lista." : "") + "</div>";
-    if (esLista()) cont.prepend(botonEditar());
+    cont.prepend(botonEditar());
     return;
   }
   if (esLista()) { pintarLista(cont, items); return; }
+  cont.appendChild(botonEditar());
+  avisoSeccion(cont);
   items.forEach((u, k) => {
     const b = document.createElement("button");
     b.style.animationDelay = (k * 40) + "ms";
@@ -456,6 +502,69 @@ function filasRango() {
   return base.filter(r => r.f >= corte);
 }
 
+let nDatos = 0, vent = null, superpuesto = null;
+
+function aplicarVentana(min, max) {
+  if (!grafico) return;
+  const total = nDatos - 1, largo = Math.max(4, Math.min(total, max - min));
+  min = Math.max(0, Math.min(total - largo, min));
+  const completo = largo >= total - 0.001;
+  vent = completo ? null : {min, max: min + largo};
+  grafico.options.scales.x.min = completo ? undefined : min;
+  grafico.options.scales.x.max = completo ? undefined : min + largo;
+  grafico.update("none");
+  document.getElementById("zoomOff").classList.toggle("hide", !vent);
+}
+
+// Zoom: pellizcar con dos dedos (también arrastrar con dos dedos) o Ctrl + rueda; doble toque para restablecer
+(function () {
+  const cv = document.getElementById("grafico");
+  let ini = null;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const centro = t => (t[0].clientX + t[1].clientX) / 2;
+  const fraccion = x => { const a = grafico.chartArea, r = cv.getBoundingClientRect(); return Math.max(0, Math.min(1, (x - r.left - a.left) / (a.right - a.left))); };
+  cv.addEventListener("touchstart", e => {
+    if (e.touches.length === 2 && grafico) {
+      const v = vent || {min: 0, max: nDatos - 1}, f = fraccion(centro(e.touches));
+      ini = {d: dist(e.touches), largo: v.max - v.min, pos: v.min + f * (v.max - v.min)};
+    } else ini = null;
+  }, {passive: true});
+  cv.addEventListener("touchmove", e => {
+    if (!ini || e.touches.length !== 2 || !grafico) return;
+    if (e.cancelable) e.preventDefault();
+    const largo = ini.largo * ini.d / Math.max(1, dist(e.touches)), f = fraccion(centro(e.touches));
+    aplicarVentana(ini.pos - f * largo, ini.pos - f * largo + largo);
+  }, {passive: false});
+  cv.addEventListener("touchend", e => { if (e.touches.length < 2) ini = null; }, {passive: true});
+  cv.addEventListener("wheel", e => {
+    if (!e.ctrlKey || !grafico) return;
+    e.preventDefault();
+    const v = vent || {min: 0, max: nDatos - 1}, f = fraccion(e.clientX), largo0 = v.max - v.min;
+    const largo = largo0 * Math.exp(e.deltaY * 0.01), pos = v.min + f * largo0;
+    aplicarVentana(pos - f * largo, pos - f * largo + largo);
+  }, {passive: false});
+  cv.addEventListener("dblclick", () => aplicarVentana(0, nDatos - 1));
+  document.getElementById("zoomOff").onclick = () => aplicarVentana(0, nDatos - 1);
+})();
+
+// Selector para superponer otro indicador sobre el que se está viendo
+function pintarSuperponer() {
+  const sel = document.getElementById("sup");
+  const oculto = comparar || !seleccion;
+  sel.classList.toggle("hide", oculto);
+  if (oculto) return;
+  if (superpuesto && !itemSup(superpuesto)) superpuesto = null;
+  let html = '<option value="">Superponer otro indicador…</option>';
+  secciones.forEach(s => {
+    if (s.hoy) return;
+    const op = s.items.filter(i => i.simbolo !== seleccion);
+    if (op.length) html += '<optgroup label="' + esc(s.nombre) + '">' + op.map(i => '<option value="' + esc(i.simbolo) + '">' + esc(i.nombre) + "</option>").join("") + "</optgroup>";
+  });
+  sel.innerHTML = html;
+  sel.value = (superpuesto && superpuesto !== seleccion) ? superpuesto : "";
+  sel.onchange = () => { superpuesto = sel.value || null; pintarGrafico(); };
+}
+
 function pintarGrafico() {
   const items = itemsVista();
   const detalle = document.getElementById("detalle");
@@ -467,14 +576,17 @@ function pintarGrafico() {
   btn.classList.toggle("hide", items.length < 2 || esLista());
   btn.classList.toggle("on", comparar);
   btn.textContent = comparar ? "Volver a un solo indicador" : "Comparar todos los de esta sección";
+  pintarSuperponer();
 
   const datos = filasRango();
   const etiquetas = datos.map(r => r.f);
+  nDatos = datos.length; vent = null;
+  document.getElementById("zoomOff").classList.add("hide");
   const estilo = getComputedStyle(document.documentElement);
   const colTexto = estilo.getPropertyValue("--muted").trim();
   const colLinea = estilo.getPropertyValue("--line").trim();
   const esTasa = seccion().tasa;
-  let datasets, decimales = 2, unidad = esTasa ? " %" : "";
+  let datasets, decimales = 2, unidad = esTasa ? " %" : "", mixto = false;
 
   if (comparar) {
     datasets = items.map((u, k) => {
@@ -494,24 +606,41 @@ function pintarGrafico() {
     decimales = (u && u.decimales) || 2;
     unidad = u ? simboloDe(u) : "";
     const serie = datos.map(r => r.v[i]);
-    const validos = serie.filter(x => x !== null);
-    const sube = validos.length < 2 || validos[validos.length - 1] >= validos[0];
-    const col = estilo.getPropertyValue(sube ? "--up" : "--down").trim();
-    datasets = [{
-      label: u ? u.nombre : seleccion,
-      data: serie,
-      borderColor: col, borderWidth: 2.5, tension: 0.25,
-      pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 20, pointBackgroundColor: col,
-      spanGaps: true, fill: true,
-      backgroundColor: c => {
-        const a = c.chart.chartArea;
-        if (!a) return col + "22";
-        const g = c.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
-        g.addColorStop(0, col + "55");
-        g.addColorStop(1, col + "00");
-        return g;
-      }
-    }];
+    const sup = (superpuesto && superpuesto !== seleccion) ? itemSup(superpuesto) : null;
+    const j = sup ? simbolos.indexOf(sup.simbolo) : -1;
+    if (j >= 0) {
+      const tasaA = !!(u && u.tasa), tasaB = !!sup.tasa, serieB = datos.map(r => r.v[j]);
+      const k0 = serie.findIndex((x, k) => x !== null && serieB[k] !== null);
+      const base100 = !tasaA && !tasaB && k0 >= 0;
+      const norm = s => base100 ? s.map((x, k) => (x === null || k < k0) ? null : x / s[k0] * 100) : s;
+      mixto = tasaA !== tasaB;
+      const unidB = (enEuros() && sup.convertible) ? " €" : simboloDe(sup);
+      const mk = (label, data, color, unid, dec, eje) => ({
+        label: base100 ? label + " (base 100)" : label, data, borderColor: color, borderWidth: 2.2, tension: 0.25,
+        pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 20, spanGaps: true, yAxisID: eje, unid, dec
+      });
+      datasets = [mk(u ? u.nombre : seleccion, norm(serie), COLORES[0], base100 ? "" : unidad, base100 ? 2 : decimales, "y"),
+                  mk(sup.nombre, norm(serieB), COLORES[3], base100 ? "" : unidB, base100 ? 2 : (sup.decimales || 2), mixto ? "y2" : "y")];
+    } else {
+      const validos = serie.filter(x => x !== null);
+      const sube = validos.length < 2 || validos[validos.length - 1] >= validos[0];
+      const col = estilo.getPropertyValue(sube ? "--up" : "--down").trim();
+      datasets = [{
+        label: u ? u.nombre : seleccion,
+        data: serie,
+        borderColor: col, borderWidth: 2.5, tension: 0.25,
+        pointRadius: 0, pointHoverRadius: 5, pointHitRadius: 20, pointBackgroundColor: col,
+        spanGaps: true, fill: true,
+        backgroundColor: c => {
+          const a = c.chart.chartArea;
+          if (!a) return col + "22";
+          const g = c.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+          g.addColorStop(0, col + "55");
+          g.addColorStop(1, col + "00");
+          return g;
+        }
+      }];
+    }
   }
 
   grafico = new Chart(document.getElementById("grafico"), {
@@ -523,18 +652,19 @@ function pintarGrafico() {
       interaction: {mode: "index", intersect: false},
       plugins: {
         cruz: {color: colTexto},
-        legend: {display: comparar, labels: {color: colTexto, boxWidth: 12}},
+        legend: {display: datasets.length > 1, labels: {color: colTexto, boxWidth: 12}},
         tooltip: {
-          displayColors: comparar, padding: 10,
+          displayColors: datasets.length > 1, padding: 10,
           callbacks: {
             title: it => fechaLarga(it[0].label),
-            label: c => c.dataset.label + ": " + fmt(c.parsed.y, decimales) + unidad
+            label: c => c.dataset.label + ": " + fmt(c.parsed.y, c.dataset.dec != null ? c.dataset.dec : decimales) + (c.dataset.unid != null ? c.dataset.unid : unidad)
           }
         }
       },
       scales: {
         x: {ticks: {color: colTexto, maxTicksLimit: 5, maxRotation: 0}, grid: {display: false}},
-        y: {ticks: {color: colTexto}, grid: {color: colLinea}}
+        y: {ticks: {color: colTexto}, grid: {color: colLinea}},
+        y2: {display: mixto, position: "right", ticks: {color: colTexto}, grid: {drawOnChartArea: false}}
       }
     }
   });
@@ -612,7 +742,7 @@ function refrescar() {
   pintarTarjetas(); pintarRangos(); pintarGrafico();
 }
 
-// ---------- Editor de la lista de empresas (guarda empresas.json en GitHub) ----------
+// ---------- Editor de la configuración: activos, índices, bonos y empresas (guarda empresas.json en GitHub) ----------
 const ls = {
   get: k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
   set: (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
@@ -628,22 +758,61 @@ const repoActual = () => {
 };
 const apiUrl = () => "https://api.github.com/repos/" + repoActual() + "/contents/empresas.json";
 const cabeceras = () => ({"Authorization": "Bearer " + ls.get("token"), "Accept": "application/vnd.github+json"});
-const seccionEmpresas = () => secciones.find(s => s.nombre === "Empresas") || {items: []};
-const tickersActuales = () => seccionEmpresas().items.map(i => i.simbolo);
-const listaActual = () => seccionEmpresas().items.map(i => ({ticker: i.simbolo, nombre: i.nombre, grupo: i.grupo || "Otras"}));
-let ed = {borrador: [], sha: null, msg: "", ocupado: false, cargado: false, q: "", sel: null, resultados: [], buscando: false, sinBusqueda: false}, sondeo = null;
+
+const SECS = [["activos", "Activos"], ["bursatiles", "Bolsa"], ["bonos", "Bonos"], ["empresas", "Empresas"]];
+const KEY_SEC = {"Activos": "activos", "Índices bursátiles": "bursatiles", "Bonos y tipos": "bonos", "Empresas": "empresas"};
+const TIPO_SEC = {activos: "activo", bursatiles: "indice", empresas: "empresa"};
+const TIPOS_YAHOO = {activos: ["FUTURE", "CRYPTOCURRENCY"], bursatiles: ["INDEX"], empresas: ["EQUITY", "ETF"]};
+const CATALOGO_BONOS = [["^TNX", "Bono EE.UU. 10 años"], ["^FVX", "Bono EE.UU. 5 años"], ["^TYX", "Bono EE.UU. 30 años"],
+  ["^IRX", "Letra EE.UU. 13 semanas"], ["ES10Y", "Bono España 10 años"], ["DE10Y", "Bono Alemania 10 años"],
+  ["FR10Y", "Bono Francia 10 años"], ["EURIBOR1M", "Euríbor 1 mes"], ["EURIBOR3M", "Euríbor 3 meses"],
+  ["EURIBOR6M", "Euríbor 6 meses"], ["EURIBOR12M", "Euríbor 12 meses"]];
+const todosSimbolos = () => new Set(secciones.flatMap(s => s.items.map(i => i.simbolo)));
+let ed = {cfg: null, guardado: "", sec: "empresas", sha: null, msg: "", ocupado: false, cargado: false,
+  q: "", sel: null, resultados: [], buscando: false, sinBusqueda: false}, sondeo = null;
+const sucio = () => !!ed.cfg && JSON.stringify(ed.cfg) !== ed.guardado;
+const grupoDe = e => e.grupo || "Otras";
+
+// Configuración a partir de lo que ya se ve en la app (si todavía no existe el archivo)
+function cfgDesdeDatos() {
+  const de = nombre => (secciones.find(s => s.nombre === nombre) || {items: []}).items.filter(i => i.simbolo !== "EURUSD=X");
+  const plano = i => ({ticker: i.simbolo, nombre: i.nombre});
+  const cfg = {activos: de("Activos").map(plano), bursatiles: de("Índices bursátiles").map(plano), bonos: de("Bonos y tipos").map(plano),
+    empresas: de("Empresas").map(i => ({ticker: i.simbolo, nombre: i.nombre, grupo: i.grupo || "Otras"}))};
+  Object.keys(avisos).forEach(t => {  // lo que está en la lista pero no tiene datos
+    const a = avisos[t], k = a.seccion || "empresas";
+    if (cfg[k] && !cfg[k].some(e => e.ticker === t))
+      cfg[k].push(k === "empresas" ? {ticker: t, nombre: a.nombre || t, grupo: a.grupo || "Otras"} : {ticker: t, nombre: a.nombre || t});
+  });
+  return cfg;
+}
+function agrupar(cfg) {  // las empresas de un mismo grupo van juntas
+  const nombres = [...new Set(cfg.empresas.map(grupoDe))];
+  cfg.empresas = nombres.flatMap(n => cfg.empresas.filter(e => grupoDe(e) === n));
+  return cfg;
+}
+function normalizar(raw) {
+  const base = cfgDesdeDatos();
+  const o = Array.isArray(raw) ? {empresas: raw} : (raw && typeof raw === "object" ? raw : {});
+  const cfg = {};
+  SECS.forEach(([k]) => { cfg[k] = Array.isArray(o[k]) ? o[k].filter(e => e && e.ticker) : base[k]; });
+  return agrupar(cfg);
+}
 
 function errorGitHub(status) {
   if (status === 401) return "El token no es válido o ha caducado.";
   if (status === 403 || status === 404) return "El token no tiene permiso para escribir en este repositorio (revisa Contents: Read and write).";
-  if (status === 409 || status === 422) return "La lista cambió mientras la editabas. Ciérrala y ábrela de nuevo.";
+  if (status === 409 || status === 422) return "La configuración cambió mientras la editabas. Ciérrala y ábrela de nuevo.";
   return "Error de GitHub (" + status + ").";
 }
 
 async function abrirEditor() {
   document.getElementById("editor").classList.remove("hide");
-  ed.msg = ""; ed.cargado = false; ed.sel = null; ed.q = ""; ed.resultados = [];
+  ed.msg = ""; ed.sel = null; ed.q = ""; ed.resultados = [];
+  ed.sec = KEY_SEC[seccion().nombre] || ed.sec;
   if (!ls.get("token")) { pintarEditor(); return; }
+  if (ed.cargado && sucio()) { pintarEditor(); return; }  // conserva los cambios sin guardar
+  ed.cargado = false;
   await cargarBorrador();
 }
 
@@ -652,62 +821,68 @@ async function cargarBorrador() {
   ed.ocupado = true; ed.cargado = false; ed.msg = "Cargando…"; pintarEditor();
   try {
     const r = await fetch(apiUrl(), {headers: cabeceras(), cache: "no-store"});
-    if (r.status === 404) { ed.sha = null; ed.borrador = listaActual(); }
+    if (r.status === 404) { ed.sha = null; ed.cfg = normalizar(null); }
     else if (!r.ok) throw new Error(errorGitHub(r.status));
-    else { const j = await r.json(); ed.sha = j.sha; ed.borrador = JSON.parse(deB64(j.content)); }
+    else { const j = await r.json(); ed.sha = j.sha; ed.cfg = normalizar(JSON.parse(deB64(j.content))); }
+    ed.guardado = JSON.stringify(ed.cfg);
     ed.cargado = true; ed.msg = "";
   } catch (e) { ed.msg = e.message === "Failed to fetch" ? "No se pudo conectar con GitHub." : e.message; }
   ed.ocupado = false; pintarEditor();
 }
 
-async function guardarLista(nueva, texto) {
-  const previa = ed.borrador;
+async function guardarCfg() {
   ed.ocupado = true; ed.msg = "Guardando…"; pintarEditor();
+  const cfg = agrupar(JSON.parse(JSON.stringify(ed.cfg)));
   try {
-    const body = {message: "Actualizar lista de empresas", content: aB64(JSON.stringify(nueva, null, 2) + "\n")};
+    const body = {message: "Actualizar la configuración de la app", content: aB64(JSON.stringify(cfg, null, 2) + "\n")};
     if (ed.sha) body.sha = ed.sha;
     const r = await fetch(apiUrl(), {method: "PUT", headers: Object.assign({"Content-Type": "application/json"}, cabeceras()), body: JSON.stringify(body)});
     if (!r.ok) throw new Error(errorGitHub(r.status));
     ed.sha = (await r.json()).content.sha;
-    ed.borrador = nueva;
-    ed.msg = "✓ " + texto + " Los datos se están actualizando (puede tardar unos minutos); esta pantalla se refrescará sola.";
-    seguirActualizacion(new Set(nueva.map(e => e.ticker)));
-  } catch (e) {
-    ed.borrador = previa;
-    ed.msg = e.message === "Failed to fetch" ? "No se pudo conectar con GitHub." : e.message;
-  }
+    ed.cfg = cfg; ed.guardado = JSON.stringify(cfg);
+    ed.msg = "✓ Guardado. Los datos se están actualizando (puede tardar unos minutos); esta pantalla se refrescará sola.";
+    seguirActualizacion(cfg);
+  } catch (e) { ed.msg = e.message === "Failed to fetch" ? "No se pudo conectar con GitHub." : e.message; }
   ed.ocupado = false; pintarEditor();
 }
 
-// Comprueba cada 15 s si los datos ya reflejan la nueva lista
-function seguirActualizacion(deseados) {
+// Orden en el que debería quedar cada sección cuando los datos estén actualizados
+const ordenEsperado = cfg => ({"Activos": cfg.activos.map(e => e.ticker), "Índices bursátiles": cfg.bursatiles.map(e => e.ticker),
+  "Bonos y tipos": cfg.bonos.map(e => e.ticker), "Empresas": cfg.empresas.map(e => e.ticker)});
+
+// Comprueba cada 15 s si los datos ya reflejan la nueva configuración
+function seguirActualizacion(cfg) {
   clearInterval(sondeo);
-  const t0 = Date.now();
+  const t0 = Date.now(), esperado = ordenEsperado(cfg);
   sondeo = setInterval(async () => {
     try {
       const r = await fetch("data/ultimo.json?" + Date.now(), {cache: "reload"});
-      const sec = (await r.json()).secciones.find(s => s.nombre === "Empresas");
-      const hay = new Set(sec ? sec.items.map(i => i.simbolo) : []);
+      const secs = (await r.json()).secciones;
       let sin = {};
       try { const ra = await fetch("data/avisos.json?" + Date.now(), {cache: "reload"}); if (ra.ok) sin = (await ra.json()).sin_datos || {}; } catch (e) {}
-      if ([...deseados].every(t => hay.has(t) || sin[t]) && [...hay].every(t => deseados.has(t))) {
+      const listo = Object.keys(esperado).every(nombre => {
+        const s = secs.find(x => x.nombre === nombre);
+        const real = (s ? s.items.map(i => i.simbolo) : []).filter(t => t !== "EURUSD=X");
+        return JSON.stringify(esperado[nombre].filter(t => !sin[t])) === JSON.stringify(real);
+      });
+      if (listo) {
         clearInterval(sondeo);
         await cargar(true);
-        const malos = [...deseados].filter(t => sin[t] && !hay.has(t));
-        ed.msg = malos.length ? "Listo, pero no se encontraron datos de " + malos.join(", ") + ". Revisa el ticker." : "✓ Datos actualizados.";
+        const malos = Object.keys(esperado).flatMap(n => esperado[n]).filter(t => sin[t]);
+        ed.msg = malos.length ? "Listo, pero no se encontraron datos de " + malos.map(t => (sin[t].nombre || t)).join(", ") + ". Revisa el ticker." : "✓ Datos actualizados.";
         pintarEditor();
         return;
       }
     } catch (e) {}
     if (Date.now() - t0 > 6 * 60000) {
       clearInterval(sondeo);
-      ed.msg = "Aún no se ven todos los cambios. Si falta alguna empresa, comprueba que su ticker exista en Yahoo Finance.";
+      ed.msg = "Aún no se ven todos los cambios. Si falta algo, comprueba que su ticker exista en Yahoo Finance.";
       pintarEditor();
     }
   }, 15000);
 }
 
-// ----- Búsqueda de empresas por nombre o ticker (Yahoo Finance) -----
+// ----- Búsqueda por nombre o ticker (directorio incluido + Yahoo Finance) -----
 const limpiarNombre = n => {
   let t = String(n || "").replace(/,?\s+(S\.?A\.?U?|Inc\.?|Corp(oration)?\.?|Ltd\.?|PLC|N\.?V\.?|AG|SE|Co\.?)$/i, "").trim();
   if (t.length > 5 && t === t.toUpperCase() && !/\d/.test(t)) t = t.charAt(0) + t.slice(1).toLowerCase();
@@ -722,7 +897,7 @@ async function pedir(url, ms) {
   } finally { clearTimeout(t); }
 }
 let rutaBusqueda = 0, tBusca = null, idBusca = 0;
-async function buscarEmpresas(q) {
+async function buscarEmpresas(q, tipos) {
   const base = "https://query2.finance.yahoo.com/v1/finance/search?quotesCount=10&newsCount=0&listsCount=0&q=" + encodeURIComponent(q);
   const rutas = [u => u, u => "https://corsproxy.io/?url=" + encodeURIComponent(u), u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u)];
   for (let k = 0; k < rutas.length; k++) {
@@ -731,17 +906,18 @@ async function buscarEmpresas(q) {
       const j = await pedir(rutas[i](base), 6000);
       if (j && Array.isArray(j.quotes)) {
         rutaBusqueda = i;
-        return j.quotes.filter(x => x.symbol && ["EQUITY", "ETF"].includes(x.quoteType)).slice(0, 8);
+        return j.quotes.filter(x => x.symbol && tipos.includes(x.quoteType)).slice(0, 8);
       }
     } catch (e) {}
   }
   return null;  // no se pudo consultar
 }
+
 // Directorio incluido en la app: la búsqueda funciona aunque el buscador en línea falle
 const DIRECTORIO = [];
-const dir = (bolsa, texto) => texto.split(";").forEach(p => {
-  const k = p.lastIndexOf("=");
-  DIRECTORIO.push({nombre: p.slice(0, k).trim(), simbolo: p.slice(k + 1).trim(), bolsa});
+const dir = (bolsa, texto, tipo) => texto.split(";").forEach(p => {
+  const k = p.indexOf("=");
+  DIRECTORIO.push({nombre: p.slice(0, k).trim(), simbolo: p.slice(k + 1).trim(), bolsa, tipo: tipo || "empresa"});
 });
 dir("Madrid", "Acciona=ANA.MC; Acciona Energía=ANE.MC; Acerinox=ACX.MC; ACS=ACS.MC; Aena=AENA.MC; Almirall=ALM.MC; Amadeus=AMS.MC; ArcelorMittal=MTS.MC; Arteche=ART.MC; Banco Sabadell=SAB.MC; Banco Santander=SAN.MC; Bankinter=BKT.MC; BBVA=BBVA.MC; CaixaBank=CABK.MC; Cellnex=CLNX.MC; Colonial=COL.MC; Corporación Financiera Alba=ALB.MC; Ebro Foods=EBRO.MC; Enagás=ENG.MC; Endesa=ELE.MC; Ferrovial=FER.MC; Fluidra=FDR.MC; Gestamp=GEST.MC; Grifols=GRF.MC; IAG=IAG.MC; Iberdrola=IBE.MC; Indra=IDR.MC; Inditex=ITX.MC; Logista=LOG.MC; Mapfre=MAP.MC; Meliá Hotels=MEL.MC; Merlin Properties=MRL.MC; Naturgy=NTGY.MC; Opdenergy=OPDE.MC; Redeia=RED.MC; Repsol=REP.MC; Rovi=ROVI.MC; Sacyr=SCYR.MC; Solaria=SLR.MC; Soltec=SOL.MC; Técnicas Reunidas=TRE.MC; Telefónica=TEF.MC; Unicaja=UNI.MC; Viscofan=VIS.MC");
 dir("Lisboa", "EDP=EDP.LS; EDP Renováveis=EDPR.LS; Galp=GALP.LS; REN=RENE.LS; Jerónimo Martins=JMT.LS");
@@ -756,9 +932,11 @@ dir("EE. UU.", "Apple=AAPL; Microsoft=MSFT; Alphabet (Google)=GOOGL; Amazon=AMZN
 dir("Latinoamérica", "Petrobras=PBR; Vale=VALE; Itaú Unibanco=ITUB; Bradesco=BBD; MercadoLibre=MELI; América Móvil=AMX; FEMSA=FMX; Cemex=CX; Southern Copper=SCCO; Ecopetrol=EC; Credicorp=BAP; YPF=YPF; SQM=SQM; Enel Américas=ENIA; Enel Chile=ENIC; Pampa Energía=PAM; Grupo México=GMEXICOB.MX; Walmart de México=WALMEX.MX; Banco de Chile=BCH; LATAM Airlines=LTM");
 dir("Arabia Saudí", "Saudi Aramco=2222.SR; SABIC=2010.SR; Al Rajhi Bank=1120.SR; STC=7010.SR; ACWA Power=2082.SR; Saudi Electricity=5110.SR; Ma'aden=1211.SR");
 dir("Asia", "Samsung Electronics=005930.KS; TSMC=TSM; Toyota=TM; Sony=SONY; Hitachi=6501.T; Mitsubishi Electric=6503.T; Alibaba=BABA; Tencent=0700.HK; BYD=1211.HK; LS Electric=010120.KS; HD Hyundai Electric=267260.KS");
+dir("Índice", "S&P 500=^GSPC; Nasdaq Composite=^IXIC; Nasdaq 100=^NDX; Dow Jones=^DJI; Russell 2000=^RUT; VIX (volatilidad)=^VIX; IBEX 35=^IBEX; Euro Stoxx 50=^STOXX50E; DAX=^GDAXI; CAC 40=^FCHI; FTSE 100=^FTSE; FTSE MIB=FTSEMIB.MI; AEX=^AEX; SMI=^SSMI; Nikkei 225=^N225; Hang Seng=^HSI; Shanghai Composite=000001.SS; Kospi=^KS11; Nifty 50=^NSEI; Bovespa=^BVSP; IPC México=^MXX; S&P/TSX=^GSPTSE; Tadawul (TASI)=^TASI.SR", "indice");
+dir("Materia prima / cripto", "Oro=GC=F; Plata=SI=F; Platino=PL=F; Cobre=HG=F; Petróleo Brent=BZ=F; Petróleo WTI=CL=F; Gas natural=NG=F; Bitcoin=BTC-USD; Ethereum=ETH-USD; Solana=SOL-USD; XRP=XRP-USD", "activo");
 
 const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-function buscarLocal(q) {
+function buscarLocal(q, tipo) {
   const n = norm(q).trim(), t = q.trim().toUpperCase();
   const puntos = d => {
     const nom = norm(d.nombre);
@@ -767,7 +945,7 @@ function buscarLocal(q) {
     if (nom.includes(n) || d.simbolo.startsWith(t)) return 1;
     return 0;
   };
-  return DIRECTORIO.map(d => [puntos(d), d]).filter(x => x[0] > 0).sort((a, b) => b[0] - a[0]).slice(0, 8)
+  return DIRECTORIO.filter(d => d.tipo === tipo).map(d => [puntos(d), d]).filter(x => x[0] > 0).sort((a, b) => b[0] - a[0]).slice(0, 8)
     .map(x => ({symbol: x[1].simbolo, shortname: x[1].nombre, exchDisp: x[1].bolsa, quoteType: "EQUITY"}));
 }
 
@@ -775,10 +953,10 @@ function alEscribir(valor) {
   ed.q = valor; clearTimeout(tBusca);
   const q = valor.trim(), id = ++idBusca;
   if (q.length < 2) { ed.buscando = false; ed.resultados = []; ed.sinBusqueda = false; pintarResultados(); return; }
-  const local = buscarLocal(q);
+  const local = buscarLocal(q, TIPO_SEC[ed.sec]);
   ed.resultados = local; ed.sinBusqueda = false; ed.buscando = true; pintarResultados();
   tBusca = setTimeout(async () => {
-    const r = await buscarEmpresas(q);
+    const r = await buscarEmpresas(q, TIPOS_YAHOO[ed.sec] || []);
     if (id !== idBusca) return;
     ed.buscando = false; ed.sinBusqueda = r === null;
     if (r) { const vistos = new Set(local.map(x => x.symbol)); ed.resultados = local.concat(r.filter(x => !vistos.has(x.symbol))).slice(0, 10); }
@@ -786,12 +964,20 @@ function alEscribir(valor) {
   }, 350);
 }
 
+function anadirElemento(e, texto) {
+  ed.cfg[ed.sec].push(e);
+  agrupar(ed.cfg);
+  ed.sel = null; ed.q = ""; ed.resultados = []; ed.sinBusqueda = false;
+  ed.msg = texto + " añadido a la lista. Pulsa «Guardar y actualizar datos» para aplicarlo.";
+  pintarEditor();
+}
+
 function pintarResultados() {
   const c = document.getElementById("edResultados");
   if (!c) return;
   const q = ed.q.trim();
   if (q.length < 2) { c.innerHTML = ""; return; }
-  const ya = new Set(ed.borrador.map(e => e.ticker));
+  const ya = new Set(ed.cfg[ed.sec].map(e => e.ticker));
   const t = q.toUpperCase();
   let html = ed.resultados.map((x, i) => '<button class="res" data-r="' + i + '"' + (ya.has(x.symbol) ? " disabled" : "") + "><b>" +
     esc(limpiarNombre(x.shortname || x.longname || x.symbol)) + "</b><small>" + esc(x.symbol) + " · " + esc(x.exchDisp || "") +
@@ -799,28 +985,48 @@ function pintarResultados() {
   if (!ed.resultados.length && !ed.buscando) {
     html += '<div class="msgEd">' + (ed.sinBusqueda ? "No está en la lista incluida y no se pudo consultar el buscador en línea." : "Sin resultados para «" + esc(q) + "».") +
       " Si conoces el ticker, escríbelo completo (p. ej. REP.MC).</div>";
-    if (!ya.has(t) && (/^[A-Z0-9^=-]{1,5}$/.test(t) || /^[A-Z0-9^=-]{1,8}\.[A-Z]{1,3}$/.test(t)))
+    const pareceTicker = /^[A-Z0-9.^=-]{1,12}$/.test(t) && (/[.^=-]/.test(t) || t.length <= 5);
+    if (!ya.has(t) && pareceTicker)
       html += '<button class="res" data-t="1"><b>Usar «' + esc(t) + '» como ticker</b><small>Sin comprobar</small></button>';
   }
   if (ed.buscando) html += '<div class="msgEd">Buscando más resultados…</div>';
   c.innerHTML = html;
   c.querySelectorAll("button.res").forEach(b => {
     b.onclick = () => {
-      if (b.dataset.t) ed.sel = {ticker: t, nombre: t, bolsa: ""};
+      let ticker, nombre, bolsa = "";
+      if (b.dataset.t) { ticker = t; nombre = t; }
       else {
         const x = ed.resultados[Number(b.dataset.r)];
-        ed.sel = {ticker: x.symbol, nombre: limpiarNombre(x.shortname || x.longname || x.symbol), bolsa: x.exchDisp || ""};
+        ticker = x.symbol; nombre = limpiarNombre(x.shortname || x.longname || x.symbol); bolsa = x.exchDisp || "";
       }
-      pintarEditor();
+      if (ed.sec === "empresas") { ed.sel = {ticker, nombre, bolsa}; pintarEditor(); }
+      else anadirElemento({ticker, nombre}, nombre);
     };
   });
+}
+
+const quitarToken = () => { ls.set("token", ""); ed.cfg = null; ed.cargado = false; ed.msg = ""; pintarEditor(); };
+
+function mover(k, i, d) {
+  const l = ed.cfg[k], j = i + d;
+  if (j < 0 || j >= l.length) return;
+  if (k === "empresas" && grupoDe(l[i]) !== grupoDe(l[j])) return;
+  [l[i], l[j]] = [l[j], l[i]];
+  pintarEditor();
+}
+function moverGrupo(g, d) {
+  const nombres = [...new Set(ed.cfg.empresas.map(grupoDe))], i = nombres.indexOf(g), j = i + d;
+  if (j < 0 || j >= nombres.length) return;
+  [nombres[i], nombres[j]] = [nombres[j], nombres[i]];
+  ed.cfg.empresas = nombres.flatMap(n => ed.cfg.empresas.filter(e => grupoDe(e) === n));
+  pintarEditor();
 }
 
 function pintarEditor() {
   const c = document.getElementById("edCuerpo");
   const msg = ed.msg ? '<div class="msgEd">' + esc(ed.msg) + "</div>" : "";
   if (!ls.get("token")) {
-    c.innerHTML = '<p class="msgEd">Para editar la lista desde aquí hace falta un <b>token</b> de GitHub. Se crea una sola vez y se guarda solo en este dispositivo.</p>' +
+    c.innerHTML = '<p class="msgEd">Para editar desde aquí hace falta un <b>token</b> de GitHub. Se crea una sola vez y se guarda solo en este dispositivo.</p>' +
       '<ol class="pasos"><li>Abre <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>.</li>' +
       "<li>Nombre: <i>App índices</i>. Caducidad: la más larga. En <i>Repository access</i> elige <i>Only select repositories</i> y marca tu repositorio.</li>" +
       "<li>En <i>Permissions → Repository permissions</i> pon <i>Contents</i> en <i>Read and write</i>.</li>" +
@@ -837,65 +1043,84 @@ function pintarEditor() {
     };
     return;
   }
-  const actuales = new Set(tickersActuales());
-  const filasEd = ed.borrador.map((e, i) => {
-    const av = avisos[e.ticker], hay = actuales.has(e.ticker);
+  if (!ed.cargado || !ed.cfg) {
+    c.innerHTML = msg + '<button class="enlace" id="edQuitar">Quitar el token de este dispositivo</button>';
+    document.getElementById("edQuitar").onclick = quitarToken;
+    return;
+  }
+
+  const k = ed.sec, lista = ed.cfg[k], hayDatos = todosSimbolos();
+  const gnombres = [...new Set(ed.cfg.empresas.map(grupoDe))];
+  const pestanas = '<div class="pests">' + SECS.map(([kk, t]) => '<button class="pest' + (kk === k ? " on" : "") + '" data-sec="' + kk + '">' + t + "</button>").join("") + "</div>";
+  let filas = "", gAnt = null;
+  lista.forEach((e, i) => {
+    if (k === "empresas" && grupoDe(e) !== gAnt) {
+      gAnt = grupoDe(e);
+      const gi = gnombres.indexOf(gAnt);
+      filas += '<div class="ghead"><span>' + esc(gAnt) + '</span><span><button data-gup="' + esc(gAnt) + '"' + (gi === 0 ? " disabled" : "") +
+        '>▲</button><button data-gdn="' + esc(gAnt) + '"' + (gi === gnombres.length - 1 ? " disabled" : "") + ">▼</button></span></div>";
+    }
+    const av = avisos[e.ticker], hay = hayDatos.has(e.ticker);
     const estado = hay ? "" : (av ? " · ⚠ sin datos" : " · pendiente de actualizar");
-    const sug = (!hay && av && av.sugerencias ? av.sugerencias : []).filter(x => !ed.borrador.some(b => b.ticker === x.symbol))
+    const arriba = i > 0 && (k !== "empresas" || grupoDe(lista[i - 1]) === grupoDe(e));
+    const abajo = i < lista.length - 1 && (k !== "empresas" || grupoDe(lista[i + 1]) === grupoDe(e));
+    const sug = (!hay && av && av.sugerencias ? av.sugerencias : []).filter(x => !lista.some(b => b.ticker === x.symbol))
       .map(x => '<button class="res" data-fix="' + i + '" data-s="' + esc(x.symbol) + '"><b>¿Es «' + esc(limpiarNombre(x.nombre)) + '»?</b><small>Usar ' +
         esc(x.symbol) + (x.bolsa ? " · " + esc(x.bolsa) : "") + "</small></button>").join("");
-    return '<div class="edfila"><div class="i"><b>' + esc(e.nombre) + "</b><small>" + esc(e.ticker) + " · " + esc(e.grupo || "Otras") + estado +
-      '</small></div><button data-i="' + i + '" aria-label="Eliminar">🗑</button></div>' + sug;
-  }).join("");
-  let grupos = [...new Set(ed.borrador.map(e => e.grupo || "Otras"))];
-  if (!grupos.length) grupos = ["Otras"];
+    filas += '<div class="edfila"><div class="mv"><button data-up="' + i + '"' + (arriba ? "" : " disabled") + '>▲</button><button data-dn="' + i + '"' + (abajo ? "" : " disabled") +
+      '>▼</button></div><div class="i"><b>' + esc(e.nombre) + "</b><small>" + esc(e.ticker) + estado + '</small></div><button data-del="' + i + '" aria-label="Quitar">🗑</button></div>' + sug;
+  });
+
   let anadir;
-  if (ed.sel) {
+  if (k === "bonos") {
+    const libres = CATALOGO_BONOS.filter(([t]) => !lista.some(e => e.ticker === t));
+    anadir = '<select id="edBono"><option value="">Añadir bono o tipo…</option>' + libres.map(([t, n]) => '<option value="' + esc(t) + '">' + esc(n) + "</option>").join("") + "</select>";
+  } else if (ed.sel) {
+    const grupos = gnombres.length ? gnombres : ["Otras"];
     anadir = '<div class="edsel"><div class="i"><b>' + esc(ed.sel.nombre) + "</b><small>" + esc(ed.sel.ticker) + (ed.sel.bolsa ? " · " + esc(ed.sel.bolsa) : "") +
       '</small></div><button id="edCambiar" aria-label="Cambiar">✕</button></div>' +
       '<select id="edGrupoSel">' + grupos.map(g => '<option value="' + esc(g) + '">' + esc(g) + "</option>").join("") + '<option value="__nuevo">➕ Nuevo grupo…</option></select>' +
       '<input id="edGrupoNuevo" class="hide" placeholder="Nombre del nuevo grupo">' +
-      '<button class="btn" id="edAnadir"' + (ed.cargado && !ed.ocupado ? "" : " disabled") + ">Añadir y actualizar datos</button>";
+      '<button class="btn sec" id="edAnadir">Añadir a la lista</button>';
   } else {
-    anadir = '<input id="edBuscar" placeholder="Nombre de la empresa o ticker (p. ej. Iberdrola, AAPL)" autocomplete="off" value="' + esc(ed.q) + '"><div id="edResultados"></div>';
+    const ayuda = {activos: "Busca un activo (p. ej. plata, ethereum)", bursatiles: "Busca un índice (p. ej. DAX, Nikkei)", empresas: "Nombre de la empresa o ticker (p. ej. Iberdrola, AAPL)"}[k];
+    anadir = '<input id="edBuscar" placeholder="' + ayuda + '" autocomplete="off" value="' + esc(ed.q) + '"><div id="edResultados"></div>';
   }
-  c.innerHTML = msg + (ed.cargado ? (filasEd || '<p class="msgEd">La lista está vacía.</p>') : "") +
-    '<div class="grupo">Añadir empresa</div>' + (ed.cargado ? anadir : "") +
+  const pie = sucio() ? '<div class="edpie"><button class="btn" id="edGuardar"' + (ed.ocupado ? " disabled" : "") + '>Guardar y actualizar datos</button><button class="enlace" id="edDescartar">Descartar cambios</button></div>' : "";
+  c.innerHTML = msg + pestanas + (filas || '<p class="msgEd">Esta sección está vacía.</p>') + '<div class="grupo">Añadir</div>' + anadir + pie +
     '<button class="enlace" id="edQuitar">Quitar el token de este dispositivo</button>';
-  c.querySelectorAll("button[data-i]").forEach(b => {
-    b.onclick = () => {
-      if (ed.ocupado) return;
-      const e = ed.borrador[Number(b.dataset.i)];
-      if (!confirm("¿Quitar " + e.nombre + " de la lista?")) return;
-      guardarLista(ed.borrador.filter((_, k) => k !== Number(b.dataset.i)), e.nombre + " eliminada.");
-    };
-  });
-  c.querySelectorAll("button[data-fix]").forEach(b => {
-    b.onclick = () => {
-      if (ed.ocupado) return;
-      const i = Number(b.dataset.fix);
-      guardarLista(ed.borrador.map((e, k) => k === i ? Object.assign({}, e, {ticker: b.dataset.s}) : e), "Ticker corregido.");
-    };
-  });
-  if (ed.sel) {
+
+  c.querySelectorAll("button[data-sec]").forEach(b => { b.onclick = () => { ed.sec = b.dataset.sec; ed.sel = null; ed.q = ""; ed.resultados = []; ed.buscando = false; idBusca++; pintarEditor(); }; });
+  c.querySelectorAll("button[data-up]").forEach(b => { b.onclick = () => mover(k, Number(b.dataset.up), -1); });
+  c.querySelectorAll("button[data-dn]").forEach(b => { b.onclick = () => mover(k, Number(b.dataset.dn), 1); });
+  c.querySelectorAll("button[data-gup]").forEach(b => { b.onclick = () => moverGrupo(b.dataset.gup, -1); });
+  c.querySelectorAll("button[data-gdn]").forEach(b => { b.onclick = () => moverGrupo(b.dataset.gdn, 1); });
+  c.querySelectorAll("button[data-del]").forEach(b => { b.onclick = () => { lista.splice(Number(b.dataset.del), 1); pintarEditor(); }; });
+  c.querySelectorAll("button[data-fix]").forEach(b => { b.onclick = () => { lista[Number(b.dataset.fix)].ticker = b.dataset.s; ed.msg = "Ticker corregido. Pulsa «Guardar y actualizar datos» para aplicarlo."; pintarEditor(); }; });
+
+  if (k === "bonos") {
+    const sel = document.getElementById("edBono");
+    sel.onchange = () => { if (!sel.value) return; const n = CATALOGO_BONOS.find(x => x[0] === sel.value)[1]; anadirElemento({ticker: sel.value, nombre: n}, n); };
+  } else if (ed.sel) {
     const sel = document.getElementById("edGrupoSel"), nuevo = document.getElementById("edGrupoNuevo");
     sel.onchange = () => nuevo.classList.toggle("hide", sel.value !== "__nuevo");
     document.getElementById("edCambiar").onclick = () => { ed.sel = null; pintarEditor(); };
     document.getElementById("edAnadir").onclick = () => {
       const g = sel.value === "__nuevo" ? nuevo.value.trim() : sel.value;
       if (!g) { ed.msg = "Escribe el nombre del grupo."; pintarEditor(); return; }
-      if (ed.borrador.some(e => e.ticker === ed.sel.ticker)) { ed.msg = "Ese ticker ya está en la lista."; ed.sel = null; pintarEditor(); return; }
-      const nueva = ed.borrador.concat([{ticker: ed.sel.ticker, nombre: ed.sel.nombre, grupo: g}]);
-      const nombre = ed.sel.nombre;
-      ed.sel = null; ed.q = ""; ed.resultados = []; ed.sinBusqueda = false;
-      guardarLista(nueva, nombre + " añadida.");
+      if (lista.some(e => e.ticker === ed.sel.ticker)) { ed.msg = "Ese ticker ya está en la lista."; ed.sel = null; pintarEditor(); return; }
+      anadirElemento({ticker: ed.sel.ticker, nombre: ed.sel.nombre, grupo: g}, ed.sel.nombre);
     };
-  } else if (ed.cargado) {
+  } else {
     const caja = document.getElementById("edBuscar");
     caja.oninput = () => alEscribir(caja.value);
     pintarResultados();
   }
-  document.getElementById("edQuitar").onclick = () => { ls.set("token", ""); ed.borrador = []; ed.cargado = false; ed.msg = ""; pintarEditor(); };
+  if (sucio()) {
+    document.getElementById("edGuardar").onclick = guardarCfg;
+    document.getElementById("edDescartar").onclick = () => { ed.cfg = JSON.parse(ed.guardado); ed.msg = ""; ed.sel = null; pintarEditor(); };
+  }
+  document.getElementById("edQuitar").onclick = quitarToken;
 }
 
 const cerrarEditor = () => document.getElementById("editor").classList.add("hide");
@@ -951,6 +1176,7 @@ async function actualizar() {
 })();
 
 document.getElementById("todos").onclick = () => { comparar = !comparar; refrescar(); };
+vista = ls.get("vista") || "lista";
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
   navigator.serviceWorker.addEventListener("message", e => { if (e.data === "datos-nuevos" && !cargando) cargar(); });

@@ -1,12 +1,13 @@
 """Descarga el cierre diario de índices, bonos, Euríbor, activos y empresas
 y mantiene el histórico.
 
+Las listas de lo que se sigue (activos, índices, bonos y empresas, y su orden) se
+leen de empresas.json, que se edita desde la app con el botón "Editar".
+
 Genera:
   data/historico.csv  -> una fila por día, una columna por indicador
   data/ultimo.json    -> último valor y variación diaria, agrupado por sección
-
-PARA AÑADIR EMPRESAS: rellena el diccionario EMPRESAS con el código de Yahoo
-Finance y el nombre, por ejemplo {"IBE.MC": "Iberdrola", "AAPL": "Apple"}.
+  data/avisos.json    -> indicadores de la lista de los que no se han podido obtener datos
 """
 import io
 import json
@@ -17,66 +18,109 @@ import requests
 import yfinance as yf
 
 # ----------------------------- CONFIGURACIÓN -----------------------------
-ACTIVOS = {"GC=F": "Oro", "BTC-USD": "Bitcoin", "BZ=F": "Petróleo Brent"}
-CAMBIO = {"EURUSD=X": "Euro / Dólar"}  # dólares por 1 euro
-CONVERTIBLES = ["GC=F", "BTC-USD", "BZ=F"]  # se pueden ver en euros o en dólares
-BURSATILES = {
-    "^GSPC": "S&P 500",
-    "^IXIC": "Nasdaq",
-    "^DJI": "Dow Jones",
-    "^IBEX": "IBEX 35",
+CONFIG_JSON = Path("empresas.json")
+CAMBIO = {"EURUSD=X": "Euro / Dólar"}  # dólares por 1 euro (fijo: sirve para convertir a euros)
+
+# Lo que se sigue si no existe empresas.json
+DEFECTO = {
+    "activos": [
+        {"ticker": "GC=F", "nombre": "Oro"},
+        {"ticker": "BTC-USD", "nombre": "Bitcoin"},
+        {"ticker": "BZ=F", "nombre": "Petróleo Brent"},
+    ],
+    "bursatiles": [
+        {"ticker": "^GSPC", "nombre": "S&P 500"},
+        {"ticker": "^IXIC", "nombre": "Nasdaq"},
+        {"ticker": "^DJI", "nombre": "Dow Jones"},
+        {"ticker": "^IBEX", "nombre": "IBEX 35"},
+    ],
+    "bonos": [
+        {"ticker": "^TNX", "nombre": "Bono EE.UU. 10 años"},
+        {"ticker": "ES10Y", "nombre": "Bono España 10 años"},
+        {"ticker": "FR10Y", "nombre": "Bono Francia 10 años"},
+        {"ticker": "DE10Y", "nombre": "Bono Alemania 10 años"},
+        {"ticker": "EURIBOR12M", "nombre": "Euríbor 12 meses"},
+    ],
+    "empresas": [
+        {"ticker": "CABK.MC", "nombre": "CaixaBank", "grupo": "Bancos"},
+        {"ticker": "NTGY.MC", "nombre": "Naturgy", "grupo": "Utilities"},
+        {"ticker": "ENG.MC", "nombre": "Enagás", "grupo": "Utilities"},
+        {"ticker": "RED.MC", "nombre": "Redeia", "grupo": "Utilities"},
+        {"ticker": "TEF.MC", "nombre": "Telefónica", "grupo": "Tecnológicas"},
+        {"ticker": "SPCX", "nombre": "SpaceX", "grupo": "Tecnológicas"},
+        {"ticker": "ANT", "nombre": "Anthropic", "grupo": "Tecnológicas"},
+    ],
 }
-EMPRESAS_JSON = Path("empresas.json")  # se edita desde la app (botón "Editar lista")
-EMPRESAS_DEFECTO = [
-    {"ticker": "CABK.MC", "nombre": "CaixaBank", "grupo": "Bancos"},
-    {"ticker": "NTGY.MC", "nombre": "Naturgy", "grupo": "Utilities"},
-    {"ticker": "ENG.MC", "nombre": "Enagás", "grupo": "Utilities"},
-    {"ticker": "RED.MC", "nombre": "Redeia", "grupo": "Utilities"},
-    {"ticker": "TEF.MC", "nombre": "Telefónica", "grupo": "Tecnológicas"},
-    {"ticker": "SPCX", "nombre": "SpaceX", "grupo": "Tecnológicas"},
-    {"ticker": "ANT", "nombre": "Anthropic", "grupo": "Tecnológicas"},
-]
+
+# Bonos y tipos que no vienen de Yahoo: id -> (fuente, código, nombre)
+CATALOGO = {
+    "ES10Y": ("bde", "DPUG0B1F0ZP", "Bono España 10 años"),
+    "DE10Y": ("bde", "DPUDNBBN308", "Bono Alemania 10 años"),
+    "FR10Y": ("stooq", "10yfry.b", "Bono Francia 10 años"),
+    "EURIBOR1M": ("bce", "EURIBOR1MD_", "Euríbor 1 mes"),
+    "EURIBOR3M": ("bce", "EURIBOR3MD_", "Euríbor 3 meses"),
+    "EURIBOR6M": ("bce", "EURIBOR6MD_", "Euríbor 6 meses"),
+    "EURIBOR12M": ("bce", "EURIBOR1YD_", "Euríbor 12 meses"),
+}
+
+# Moneda según el sufijo del ticker (si no hay sufijo: dólares)
+SUFIJOS_MONEDA = {
+    "MC": "EUR", "LS": "EUR", "MI": "EUR", "PA": "EUR", "DE": "EUR", "AS": "EUR", "BR": "EUR",
+    "HE": "EUR", "L": "GBp", "SW": "CHF", "CO": "DKK", "ST": "SEK", "OL": "NOK", "SR": "SAR",
+    "KS": "KRW", "T": "JPY", "HK": "HKD", "MX": "MXN",
+}
 
 
-def leer_empresas():
+def moneda_de(ticker):
+    return SUFIJOS_MONEDA.get(ticker.rsplit(".", 1)[1], "USD") if "." in ticker else "USD"
+
+
+def leer_config():
     try:
-        lista = json.loads(EMPRESAS_JSON.read_text(encoding="utf-8"))
-        lista = [e for e in lista if e.get("ticker")]
+        c = json.loads(CONFIG_JSON.read_text(encoding="utf-8"))
     except Exception:
-        lista = EMPRESAS_DEFECTO
-    return lista
+        c = None
+    if isinstance(c, list):  # formato antiguo: solo la lista de empresas
+        c = {"empresas": c}
+    if not isinstance(c, dict):
+        c = {}
+    cfg = {}
+    for clave, defecto in DEFECTO.items():
+        lista = c.get(clave)
+        cfg[clave] = ([e for e in lista if isinstance(e, dict) and e.get("ticker")]
+                      if isinstance(lista, list) else defecto)
+    return cfg
 
 
-LISTA_EMPRESAS = leer_empresas()
-EMPRESAS = {e["ticker"]: e.get("nombre") or e["ticker"] for e in LISTA_EMPRESAS}
-GRUPO_DE = {e["ticker"]: e.get("grupo") or "Otras" for e in LISTA_EMPRESAS}
-ORDEN_EMPRESAS = [t for g in dict.fromkeys(GRUPO_DE.values())
-                  for t in EMPRESAS if GRUPO_DE[t] == g]
-BONOS_YAHOO = {"^TNX": "Bono EE.UU. 10 años"}
-BONOS_BDE = {  # identificador propio: (código de serie en el Banco de España, nombre)
-    "ES10Y": ("DPUG0B1F0ZP", "Bono España 10 años"),
-    "DE10Y": ("DPUDNBBN308", "Bono Alemania 10 años"),
-}
-BONOS_STOOQ = {  # identificador propio: (código en Stooq, nombre)
-    "FR10Y": ("10yfry.b", "Bono Francia 10 años"),
-}
-EURIBOR_BCE = {"EURIBOR12M": ("EURIBOR1YD_", "Euríbor 12 meses")}
+CFG = leer_config()
+NOMBRES, YAHOO = {}, {}
+BONOS_BDE, BONOS_STOOQ, EURIBOR_BCE = {}, {}, {}
+DESTINO = {"bde": BONOS_BDE, "stooq": BONOS_STOOQ, "bce": EURIBOR_BCE}
+for _clave, _lista in CFG.items():
+    for _e in _lista:
+        _t = _e["ticker"]
+        if _clave == "bonos" and _t in CATALOGO:
+            _fuente, _codigo, _nom = CATALOGO[_t]
+            NOMBRES[_t] = _e.get("nombre") or _nom
+            DESTINO[_fuente][_t] = (_codigo, NOMBRES[_t])
+        else:
+            NOMBRES[_t] = _e.get("nombre") or _t
+            YAHOO[_t] = NOMBRES[_t]
+YAHOO.update(CAMBIO)
+NOMBRES.update(CAMBIO)
 
-YAHOO = {**ACTIVOS, **CAMBIO, **BURSATILES, **EMPRESAS, **BONOS_YAHOO}
-NOMBRES = dict(YAHOO)
-NOMBRES.update({k: v[1] for k, v in BONOS_BDE.items()})
-NOMBRES.update({k: v[1] for k, v in BONOS_STOOQ.items()})
-NOMBRES.update({k: v[1] for k, v in EURIBOR_BCE.items()})
-
-# Moneda en la que cotiza cada valor (los índices y tipos no llevan moneda)
-MONEDA = {s: "USD" for s in CONVERTIBLES}
-MONEDA.update({s: ("EUR" if s.endswith(".MC") else "USD") for s in EMPRESAS})
+EMPRESAS = {e["ticker"]: NOMBRES[e["ticker"]] for e in CFG["empresas"]}
+GRUPO_DE = {e["ticker"]: e.get("grupo") or "Otras" for e in CFG["empresas"]}
+ORDEN_EMPRESAS = [t for g in dict.fromkeys(GRUPO_DE.values()) for t in EMPRESAS if GRUPO_DE[t] == g]
+CONVERTIBLES = [e["ticker"] for e in CFG["activos"]]  # se pueden ver en euros o en dólares
+MONEDA = {t: "USD" for t in CONVERTIBLES}
+MONEDA.update({t: moneda_de(t) for t in EMPRESAS})
 
 # (nombre de la sección, indicadores, ¿son tipos de interés?, ¿admite euros/dólares?)
 SECCIONES = [
-    ("Activos", [*ACTIVOS, *CAMBIO], False, True),
-    ("Índices bursátiles", list(BURSATILES), False, False),
-    ("Bonos y tipos", [*BONOS_YAHOO, "ES10Y", "FR10Y", "DE10Y", *EURIBOR_BCE], True, False),
+    ("Activos", [*CONVERTIBLES, *CAMBIO], False, True),
+    ("Índices bursátiles", [e["ticker"] for e in CFG["bursatiles"]], False, False),
+    ("Bonos y tipos", [e["ticker"] for e in CFG["bonos"]], True, False),
     ("Empresas", ORDEN_EMPRESAS, False, False),
 ]
 # --------------------------------------------------------------------------
@@ -160,24 +204,38 @@ def intentar(nombre, funcion, *args):
         return pd.DataFrame()
 
 
-def sugerencias(nombre):
-    """Posibles tickers para un nombre de empresa (búsqueda de Yahoo Finance)."""
+TIPOS_SUGERENCIA = {"activos": ("FUTURE", "CRYPTOCURRENCY"), "bursatiles": ("INDEX",),
+                    "empresas": ("EQUITY", "ETF")}
+
+
+def sugerencias(nombre, clave):
+    """Posibles tickers para un nombre (búsqueda de Yahoo Finance)."""
+    tipos = TIPOS_SUGERENCIA.get(clave)
+    if not tipos:
+        return []
     try:
         res = yf.Search(nombre, max_results=8, news_count=0).quotes
         return [{"symbol": q["symbol"],
                  "nombre": q.get("shortname") or q.get("longname") or q["symbol"],
                  "bolsa": q.get("exchDisp", "")}
-                for q in res if q.get("symbol") and q.get("quoteType") in ("EQUITY", "ETF")][:4]
+                for q in res if q.get("symbol") and q.get("quoteType") in tipos][:4]
     except Exception:
         return []
 
 
 def avisos(datos):
-    """Empresas de la lista de las que no se han podido obtener datos."""
+    """Indicadores de la lista de los que no se han podido obtener datos."""
     sin = {}
-    for ticker, nombre in EMPRESAS.items():
-        if ticker not in datos or datos[ticker].dropna().shape[0] < 2:
-            sin[ticker] = {"nombre": nombre, "sugerencias": sugerencias(nombre)}
+    for clave, lista in CFG.items():
+        for e in lista:
+            t = e["ticker"]
+            if t in datos and datos[t].dropna().shape[0] >= 2:
+                continue
+            propio = clave == "bonos" and t in CATALOGO
+            sin[t] = {"nombre": NOMBRES.get(t, t), "seccion": clave,
+                      "sugerencias": [] if propio else sugerencias(NOMBRES.get(t, t), clave)}
+            if clave == "empresas":
+                sin[t]["grupo"] = GRUPO_DE.get(t, "Otras")
     return sin
 
 
@@ -220,7 +278,8 @@ def main():
     nuevos = [s for s in YAHOO if s not in ya]
     partes = [intentar("Yahoo (actualización)", yahoo, ya, "1mo"),
               intentar("Yahoo (histórico)", yahoo, nuevos, "max")]
-    partes.append(intentar("Banco de España (bonos ES y DE)", bde, BONOS_BDE))
+    if BONOS_BDE:
+        partes.append(intentar("Banco de España (bonos ES y DE)", bde, BONOS_BDE))
     for simbolo, (codigo, _) in BONOS_STOOQ.items():
         partes.append(intentar(simbolo, stooq, codigo, simbolo))
     for simbolo, (clave, _) in EURIBOR_BCE.items():
@@ -230,7 +289,7 @@ def main():
         if not p.empty:
             datos = p if datos.empty else p.combine_first(datos)
 
-    # Quita las columnas de empresas eliminadas de la lista
+    # Quita las columnas de lo que ya no está en la lista
     datos = datos[[c for c in datos.columns if c in NOMBRES]]
     datos = datos.sort_index().round(4)
     datos.to_csv(CSV)
